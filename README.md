@@ -193,7 +193,7 @@ You can run it without a Python environment.
 
 # Demo
 
-[![Demo Cast](https://asciinema.org/a/JSB5Xukz0DUmtQBy.svg)](https://asciinema.org/a/JSB5Xukz0DUmtQBy)
+[![Demo Cast](https://asciinema.org/a/SPHzsBN4GvIrWs5o.svg)](https://asciinema.org/a/SPHzsBN4GvIrWs5o)
 
 ---
 
