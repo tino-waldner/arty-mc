@@ -1,6 +1,6 @@
 # arty-mc
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Python](https://img.shields.io/badge/python-3+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
 ![Status](https://img.shields.io/badge/status-experimental-orange.svg)
@@ -193,7 +193,7 @@ You can run it without a Python environment.
 
 # Demo
 
-[![Demo Cast](https://asciinema.org/a/2zwOvvT1i2v2kMho.svg)](https://asciinema.org/a/2zwOvvT1i2v2kMho)
+[![Demo Cast](https://asciinema.org/a/JSB5Xukz0DUmtQBy.svg)](https://asciinema.org/a/JSB5Xukz0DUmtQBy)
 
 ---
 
