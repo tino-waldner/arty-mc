@@ -28,7 +28,7 @@ class LocalFS:
     
                 is_dir = e.is_dir(follow_symlinks=False)
                 size = stat.st_size if stat else 0
-                modified = int(stat.st_mtime) if stat else None
+                modified = datetime.fromtimestamp(stat.st_mtime).isoformat() if stat else None
     
             except Exception:
                 pass
