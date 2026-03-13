@@ -4,7 +4,7 @@ from core.api_client import ArtifactoryAPI
 from artifactory import ArtifactoryPath
 from pathlib import Path
 
-MAX_CONCURRENCY = 6
+MAX_CONCURRENCY = 3
 
 class ArtifactoryFS:
 
