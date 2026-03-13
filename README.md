@@ -162,16 +162,21 @@ pip install pyinstaller
 
 Build the binary:
 
-**--onefile** is not recommended due to slower startup caused by runtime extraction.
+**-—onefile:** slower startup caused by runtime extraction
 
 ```bash
-pyinstaller --onedir --distpath dist --name arty-mc arty-mc.py
+pyinstaller --onefile --distpath dist --name arty-mc arty-mc.py
+```
+**-—onedir:** faster after initial startup
+
+```bash
+pyinstaller --onefile --distpath dist --name arty-mc arty-mc.py
 ```
 
 The compiled executable will appear in:
 
 ```text
-dist/arty-mc/arty-mc
+dist/arty-mc/
 ```
 
 You can run it without a Python environment.
