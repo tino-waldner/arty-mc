@@ -3,13 +3,18 @@ from textual.widgets import ProgressBar, Static
 from textual.containers import Vertical
 from textual.reactive import reactive
 
+import threading
+
 
 def human_bytes(n: int) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
     i = 0
+    n = float(n)
+
     while n >= 1024 and i < len(units) - 1:
         n /= 1024
         i += 1
+
     return f"{n:.1f} {units[i]}"
 
 
@@ -31,11 +36,42 @@ class TransferPanel(Widget):
     def compose(self):
         self.status = Static("Idle")
         self.progress = ProgressBar(total=100)
+
         with Vertical():
             yield self.status
             yield self.progress
 
+    # -------------------------
+    # thread safe dispatcher
+    # -------------------------
+
+    def _dispatch(self, fn, *args):
+
+        # If we are in the UI thread we call directly
+        if threading.current_thread() is threading.main_thread():
+            fn(*args)
+        else:
+            self.app.call_from_thread(fn, *args)
+
+    # -------------------------
+    # public API
+    # -------------------------
+
     def start(self, total_bytes: int):
+        self._dispatch(self._start_ui, total_bytes)
+
+    def advance(self, bytes_step: int):
+        self._dispatch(self._advance_ui, bytes_step)
+
+    def finish(self):
+        self._dispatch(self._finish_ui)
+
+    # -------------------------
+    # UI updates
+    # -------------------------
+
+    def _start_ui(self, total_bytes: int):
+
         self.total = total_bytes
         self.transferred = 0
 
@@ -47,9 +83,12 @@ class TransferPanel(Widget):
 
         self.visible = True
 
-    def advance(self, bytes_step: int):
+    def _advance_ui(self, bytes_step: int):
 
         self.transferred += bytes_step
+
+        if self.transferred > self.total:
+            self.transferred = self.total
 
         self.progress.advance(bytes_step)
 
@@ -59,7 +98,7 @@ class TransferPanel(Widget):
             f"{percent:5.1f}%  {human_bytes(self.transferred)} / {human_bytes(self.total)}"
         )
 
-    def finish(self):
+    def _finish_ui(self):
 
         self.progress.update(progress=self.total)
 
