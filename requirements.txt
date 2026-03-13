@@ -1,0 +1,4 @@
+textual
+requests
+dohq-artifactory
+pyyaml
