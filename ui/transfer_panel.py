@@ -41,21 +41,12 @@ class TransferPanel(Widget):
             yield self.status
             yield self.progress
 
-    # -------------------------
-    # thread safe dispatcher
-    # -------------------------
-
     def _dispatch(self, fn, *args):
 
-        # If we are in the UI thread we call directly
         if threading.current_thread() is threading.main_thread():
             fn(*args)
         else:
             self.app.call_from_thread(fn, *args)
-
-    # -------------------------
-    # public API
-    # -------------------------
 
     def start(self, total_bytes: int):
         self._dispatch(self._start_ui, total_bytes)
@@ -65,10 +56,6 @@ class TransferPanel(Widget):
 
     def finish(self):
         self._dispatch(self._finish_ui)
-
-    # -------------------------
-    # UI updates
-    # -------------------------
 
     def _start_ui(self, total_bytes: int):
 
