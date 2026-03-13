@@ -28,7 +28,7 @@ class LocalFS:
     
                 is_dir = e.is_dir(follow_symlinks=False)
                 size = stat.st_size if stat else 0
-                modified = datetime.fromtimestamp(stat.st_mtime).isoformat() if stat else None
+                modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S") if stat else None
     
             except Exception:
                 pass
@@ -41,6 +41,7 @@ class LocalFS:
                 "modified": modified
             })
     
+        items.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
         return items
 
     def cd(self, name):

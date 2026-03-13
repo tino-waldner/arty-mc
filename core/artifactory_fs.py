@@ -1,6 +1,10 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from core.api_client import ArtifactoryAPI
 from artifactory import ArtifactoryPath
+from pathlib import Path
+
+MAX_CONCURRENCY = 6
 
 class ArtifactoryFS:
 
@@ -11,11 +15,11 @@ class ArtifactoryFS:
         self.server = config["server"]
         self.auth = self.api.session.session.auth
 
+
     def list(self):
-        return self.api.list_folder(
-            self.repo,
-            self.path_str
-        )
+        items = self.api.list_folder(self.repo, self.path_str)
+        items.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
+        return items
 
     def cd(self, name):
         if self.path_str:
@@ -27,51 +31,50 @@ class ArtifactoryFS:
         parts = self.path_str.split("/")
         self.path_str = "/".join(parts[:-1])
 
-    async def delete(self, name: str, progress_callback: None):
+    async def delete(self, name: str, progress_callback=None):
         await asyncio.to_thread(self._delete, name, progress_callback)
 
-    def _delete(self, name, progress_callback):
+    def _delete(self, name, progress_callback=None):
         remote_full_path = self.path(name)
         url = f"{self.server}/{self.repo}/{remote_full_path}"
         remote = ArtifactoryPath(url, auth=self.auth)
+        items_to_delete = []
 
         if remote.is_file():
-            total = 1
-            if progress_callback:
-                progress_callback("start", total)
-            remote.unlink()
-            if progress_callback:
-                progress_callback("advance", 1)
-                progress_callback("finish", None)
-            return
+            items_to_delete.append(remote)
+        elif remote.is_dir():
+            items_to_delete.extend(sorted(remote.glob("**/*"), key=lambda x: x.is_dir()))
+            items_to_delete.append(remote)
 
-        if not remote.is_dir():
-            return
+        total = len(items_to_delete)
 
-        total = len(list(remote.glob("*")))
         if progress_callback:
             progress_callback("start", total)
 
-        for child in remote.glob("*"):
-            self._delete_path_recursive(child, progress_callback)
-        remote.rmdir()
+        with ThreadPoolExecutor(max_workers=MAX_CONCURRENCY) as executor:
+            futures = []
+            for item in items_to_delete:
+                futures.append(executor.submit(self._delete_item, item, progress_callback))
+
+            for future in futures:
+                future.result()
+
         if progress_callback:
-            progress_callback("advance", 1)
             progress_callback("finish", None)
 
-    def _delete_path_recursive(self, path: ArtifactoryPath, progress_callback):
-        if path.is_file():
-            path.unlink()
-            if progress_callback:
-                progress_callback("advance", 1)
-        elif path.is_dir():
-            for child in path.glob("*"):
-                self._delete_path_recursive(child, progress_callback)
-                if progress_callback:
-                    progress_callback("advance", 1)
-            path.rmdir()
-            if progress_callback:
-                progress_callback("advance", 1)
+    def _delete_item(self, item, progress_callback=None):
+        try:
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                try:
+                    item.rmdir()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if progress_callback:
+            progress_callback("advance", 1)
 
     def path(self, name):
         if self.path_str:

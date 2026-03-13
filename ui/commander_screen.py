@@ -108,7 +108,6 @@ class CommanderScreen(Screen):
 
 
     async def _delete_worker(self, name):
-
        self.delete_panel = DeletePanel()
        self.mount(self.delete_panel)
 
@@ -117,12 +116,12 @@ class CommanderScreen(Screen):
 
        def progress_handler(action, value):
            if action == "start":
-               self.delete_panel.start(value)
+              self.delete_panel.start(value)
            elif action == "advance":
-               self.delete_panel.advance()
+              self.delete_panel.advance(value)
            elif action == "finish":
-               self.delete_panel.finish()
-               self.delete_panel.remove()
+              self.delete_panel.finish()
+              self.delete_panel.remove()
     
        if self.active == "local":
            worker = self.run_worker(self.local_fs.delete(item["name"], 
@@ -163,10 +162,60 @@ class CommanderScreen(Screen):
             asyncio.create_task(self._delete_worker(name))
 
         self.app.push_screen(
-                ConfirmDialog(f"Delete '{path_name}'?"),
-                callback=after_confirm
+             ConfirmDialog(f"Delete '{path_name}'?"),
+             callback=after_confirm
         )
             
+    async def _copy_worker(self):
+        self.transfer_panel = TransferPanel()
+        self.mount(self.transfer_panel)
+
+        def progress_handler(action, value):
+            if action == "start":
+                self.transfer_panel.start(value)
+            elif action == "advance":
+                self.transfer_panel.advance(value)
+            elif action == "finish":
+                self.transfer_panel.finish()
+
+        if self.active == "local":
+            item = self.local_table.selected()
+            if not item:
+                return
+            src = self.local_fs.path(item["name"])
+            dst = self.remote_fs.path_str
+
+            worker = self.run_worker(upload(
+                local_path=src,
+                remote_path=dst,
+                remote_repo_url=self.remote_fs.server + "/" + self.remote_fs.repo,
+                auth=self.remote_fs.api.session.session.auth,
+                progress_callback=progress_handler)
+            )
+
+            await worker.wait()
+            self.refresh_remote()
+            self.transfer_panel.remove()
+
+        elif self.active == "remote":
+            item = self.remote_table.selected()
+            if not item:
+                return
+
+            src = self.remote_fs.path(item["name"])
+            dst = self.local_fs.cwd
+
+            worker = self.run_worker(download(
+                remote_path=src,
+                local_path=dst,
+                remote_repo_url=self.remote_fs.server + "/" + self.remote_fs.repo,
+                auth=self.remote_fs.api.session.session.auth,
+                progress_callback=progress_handler)
+            )
+
+            await worker.wait()
+            self.refresh_local()
+            self.transfer_panel.remove()
 
     async def _copy_worker(self):
         self.transfer_panel = TransferPanel()
@@ -176,10 +225,9 @@ class CommanderScreen(Screen):
             if action == "start":
                 self.transfer_panel.start(value)
             elif action == "advance":
-                self.transfer_panel.advance()
+                self.transfer_panel.advance(value)
             elif action == "finish":
                 self.transfer_panel.finish()
-                self.transfer_panel.remove()
 
         if self.active == "local":
             item = self.local_table.selected()
@@ -200,6 +248,7 @@ class CommanderScreen(Screen):
 
             result = await worker.wait()
             self.refresh_remote()
+            self.transfer_panel.remove()
 
         elif self.active == "remote":
             item = self.remote_table.selected()
@@ -208,7 +257,7 @@ class CommanderScreen(Screen):
                  return
 
             src = self.remote_fs.path(item["name"])
-            dst = self.local_fs.path(item["name"])
+            dst = self.local_fs.cwd
 
             worker = self.run_worker(download(
                  remote_path=src,
@@ -220,6 +269,7 @@ class CommanderScreen(Screen):
 
             result = await worker.wait()
             self.refresh_local()
+            self.transfer_panel.remove()
 
     def action_copy(self):
         if self.active == "local":
@@ -239,7 +289,7 @@ class CommanderScreen(Screen):
 
             remote_name=self.remote_fs.path(item["name"])
             src = f"{self.remote_fs.repo}/{remote_name}"
-            dst = self.local_fs.path(item["name"])
+            dst = self.local_fs.cwd
 
         def after_confirm(result):
             if not result:

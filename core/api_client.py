@@ -30,12 +30,12 @@ class ArtifactoryAPI:
 
         for child in folder.iterdir():
             st = child.stat()
-            size = st.size if not st.is_dir else 0
+            size = st.st_size if st and not st.is_dir else "-"
 
             if isinstance(st.mtime, (int, float)):
-               modified = datetime.fromtimestamp(st.mtime).isoformat()
+               modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
             elif isinstance(st.mtime, datetime):
-               modified = st.mtime.isoformat()
+               modified = st.mtime.strftime("%Y-%m-%d %H:%M:%S")
             else:
                modified = None
 
