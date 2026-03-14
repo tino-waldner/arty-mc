@@ -12,22 +12,13 @@ class LocalFS:
 
     def list(self):
         items = []
-
         for e in os.scandir(self.cwd):
             stat = None
             is_dir = False
             size = 0
             modified = None
-
             try:
-                if e.is_symlink():
-                    try:
-                        stat = e.stat(follow_symlinks=False)
-                    except OSError:
-                        stat = None
-                else:
-                    stat = e.stat()
-
+                stat = e.stat(follow_symlinks=False) if e.is_symlink() else e.stat()
                 is_dir = e.is_dir(follow_symlinks=False)
                 size = stat.st_size if stat else 0
                 modified = (
@@ -35,10 +26,8 @@ class LocalFS:
                     if stat
                     else None
                 )
-
             except Exception:
                 pass
-
             items.append(
                 {
                     "name": e.name,
@@ -48,7 +37,6 @@ class LocalFS:
                     "modified": modified,
                 }
             )
-
         items.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
         return items
 
@@ -67,17 +55,7 @@ class LocalFS:
         progress_callback=None,
         cancel_event: Optional[asyncio.Event] = None,
     ):
-        await self._delete(name, progress_callback, cancel_event)
-
-    async def _delete(
-        self,
-        name: str,
-        progress_callback=None,
-        cancel_event: Optional[asyncio.Event] = None,
-    ):
-        if cancel_event is None:
-            cancel_event = asyncio.Event()
-
+        cancel_event = cancel_event or asyncio.Event()
         path = os.path.normpath(self.path(name))
         if not os.path.exists(path):
             return
@@ -97,13 +75,12 @@ class LocalFS:
         semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
         async def delete_item(p):
-            if cancel_event and cancel_event.is_set():
+            if cancel_event.is_set():
                 return
             async with semaphore:
                 await asyncio.to_thread(self._delete_item, p, progress_callback)
 
-        tasks = [delete_item(p) for p in items_to_delete]
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*(delete_item(p) for p in items_to_delete))
 
         if progress_callback:
             progress_callback("finish", None)

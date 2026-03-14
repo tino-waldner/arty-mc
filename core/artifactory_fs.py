@@ -42,62 +42,63 @@ class ArtifactoryFS:
         progress_callback=None,
         cancel_event: Optional[asyncio.Event] = None,
     ):
-        if cancel_event is None:
-            cancel_event = asyncio.Event()
-
-        await self._delete(name, progress_callback, cancel_event)
-
-    async def _delete(
-        self,
-        name: str,
-        progress_callback=None,
-        cancel_event: Optional[asyncio.Event] = None,
-    ):
-        if cancel_event is None:
-            cancel_event = asyncio.Event()
+        cancel_event = cancel_event or asyncio.Event()
 
         remote_full_path = self.path(name)
         remote = ArtifactoryPath(
-            f"{self.server}/{self.repo}/{remote_full_path}", auth=self.auth
+            f"{self.server}/{self.repo}/{remote_full_path}",
+            auth=self.auth,
         )
 
         items_to_delete = []
+
         if remote.is_file():
             items_to_delete.append(remote)
+
         elif remote.is_dir():
             for item in sorted(remote.glob("**/*"), key=lambda x: x.is_dir()):
                 items_to_delete.append(item)
+
             items_to_delete.append(remote)
 
         total = len(items_to_delete)
+
         if progress_callback:
             progress_callback("start", total)
 
         semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
         async def delete_item(item):
-            if cancel_event and cancel_event.is_set():
+            if cancel_event.is_set():
                 return
+
             async with semaphore:
-                await asyncio.to_thread(self._delete_item, item, progress_callback)
+                await asyncio.to_thread(
+                    self._delete_item,
+                    item,
+                    progress_callback,
+                )
 
         tasks = [delete_item(item) for item in items_to_delete]
+
         await asyncio.gather(*tasks)
 
         if progress_callback:
             progress_callback("finish", None)
 
     def _delete_item(self, item, progress_callback=None):
-        """Blocking delete of a single file or folder."""
         try:
             if item.is_file():
                 item.unlink()
+
             elif item.is_dir():
                 try:
                     item.rmdir()
                 except Exception:
                     pass
+
         except Exception:
             pass
+
         if progress_callback:
             progress_callback("advance", 1)
