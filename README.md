@@ -53,7 +53,7 @@ For developers who prefer working directly in the terminal, this can be inconven
 
 # Requirements
 
-* Python **3**
+* Python **3+**
 * Access to an **Artifactory server**
 * Artifactory **API token**
 
@@ -141,12 +141,12 @@ This starts the **dual-pane interface** where you can browse your local filesyst
 
 | Key   | Action           |
 | ----- | ---------------- |
-| ↑ ↓   | Navigate files   |
+| ↑ ↓   | Navigate         |
 | Enter | Open directory   |
 | Tab   | Switch pane      |
 | F2    | Cancel Operation |
-| F5    | Copy file        |
-| F8    | Delete file      |
+| F5    | Copy             |
+| F8    | Delete           |
 | F10   | Quit             |
 
 ---
