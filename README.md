@@ -171,7 +171,7 @@ pyinstaller --onefile --distpath dist --name arty-mc arty-mc.py
 **-—onedir:** faster after initial startup
 
 ```bash
-pyinstaller --onefile --distpath dist --name arty-mc arty-mc.py
+pyinstaller --onedir --distpath dist --name arty-mc arty-mc.py
 ```
 
 The compiled executable will appear in:
