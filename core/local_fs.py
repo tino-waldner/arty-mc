@@ -1,7 +1,9 @@
-import os
 import asyncio
-import shutil
+import os
 from datetime import datetime
+from typing import Optional
+
+MAX_CONCURRENCY = 4
 
 
 class LocalFS:
@@ -10,13 +12,13 @@ class LocalFS:
 
     def list(self):
         items = []
-    
+
         for e in os.scandir(self.cwd):
             stat = None
             is_dir = False
             size = 0
             modified = None
-    
+
             try:
                 if e.is_symlink():
                     try:
@@ -25,22 +27,28 @@ class LocalFS:
                         stat = None
                 else:
                     stat = e.stat()
-    
+
                 is_dir = e.is_dir(follow_symlinks=False)
                 size = stat.st_size if stat else 0
-                modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S") if stat else None
-    
+                modified = (
+                    datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    if stat
+                    else None
+                )
+
             except Exception:
                 pass
-    
-            items.append({
-                "name": e.name,
-                "path": e.path,
-                "is_dir": is_dir,
-                "size": size,
-                "modified": modified
-            })
-    
+
+            items.append(
+                {
+                    "name": e.name,
+                    "path": e.path,
+                    "is_dir": is_dir,
+                    "size": size,
+                    "modified": modified,
+                }
+            )
+
         items.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
         return items
 
@@ -50,71 +58,64 @@ class LocalFS:
     def up(self):
         self.cwd = os.path.dirname(self.cwd)
 
-    async def delete(self, name: str, progress_callback: None):
-        await asyncio.to_thread(self._delete, name, progress_callback) 
+    def path(self, name):
+        return os.path.join(self.cwd, name)
 
-    def _delete(self, name, progress_callback):
-        path = os.path.join(self.cwd, name)
-        path = os.path.normpath(path)
+    async def delete(
+        self,
+        name: str,
+        progress_callback=None,
+        cancel_event: Optional[asyncio.Event] = None,
+    ):
+        await self._delete(name, progress_callback, cancel_event)
 
+    async def _delete(
+        self,
+        name: str,
+        progress_callback=None,
+        cancel_event: Optional[asyncio.Event] = None,
+    ):
+        if cancel_event is None:
+            cancel_event = asyncio.Event()
+
+        path = os.path.normpath(self.path(name))
         if not os.path.exists(path):
             return
 
-        if os.path.isfile(path):
-            total = 1
-            if progress_callback:
-                progress_callback("start", total)
-            os.remove(path)
-            if progress_callback:
-                progress_callback("advance", 1)
-                progress_callback("finish", None)
-            return
+        items_to_delete = []
+        for dirpath, dirnames, filenames in os.walk(path, topdown=False):
+            for f in filenames:
+                items_to_delete.append(os.path.join(dirpath, f))
+            for d in dirnames:
+                items_to_delete.append(os.path.join(dirpath, d))
+        items_to_delete.append(path)
 
-        if not os.path.isdir(path):
-            return
-
-
-        def count_items(root):
-            total = 0
-            for dirpath, dirnames, filenames in os.walk(root, topdown=False):
-                total += len(filenames)
-                total += len(dirnames)
-            total += 1 
-            return total
-        
-        total = count_items(path)
-
+        total = len(items_to_delete)
         if progress_callback:
             progress_callback("start", total)
-        
-        for dirpath, dirnames, filenames in os.walk(path, topdown=False):
-            for filename in filenames:
-                file_path = os.path.join(dirpath, filename)
-                try:
-                    os.remove(file_path)
-                    if progress_callback:
-                        progress_callback("advance", 1)
-                except OSError as e:
-                    print(f"Failed to remove file {file_path}: {e}")
-        
-            for dirname in dirnames:
-                dir_path = os.path.join(dirpath, dirname)
-                try:
-                    os.rmdir(dir_path)
-                    if progress_callback:
-                        progress_callback("advance", 1)
-                except OSError as e:
-                    print(f"Failed to remove directory {dir_path}: {e}")
-        
-        try:
-            os.rmdir(path)
-            if progress_callback:
-                progress_callback("advance", 1)
-        except OSError as e:
-            print(f"Failed to remove root directory {path}: {e}")
-        
+
+        semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
+        async def delete_item(p):
+            if cancel_event and cancel_event.is_set():
+                return
+            async with semaphore:
+                await asyncio.to_thread(self._delete_item, p, progress_callback)
+
+        tasks = [delete_item(p) for p in items_to_delete]
+        await asyncio.gather(*tasks)
+
         if progress_callback:
             progress_callback("finish", None)
-        
-    def path(self, name):
-        return os.path.join(self.cwd, name)
+
+    def _delete_item(self, path, progress_callback=None):
+        try:
+            if os.path.isfile(path) or os.path.islink(path):
+                os.remove(path)
+            elif os.path.isdir(path):
+                os.rmdir(path)
+        except Exception as e:
+            print(f"Failed to delete {path}: {e}")
+
+        if progress_callback:
+            progress_callback("advance", 1)

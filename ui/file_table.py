@@ -1,16 +1,24 @@
 import fnmatch
+
 from textual.widgets import DataTable
 
-class FileTable(DataTable):
 
+class FileTable(DataTable):
     can_focus = True
 
+    def set_enabled(self, enabled: bool):
+        self.disabled = not enabled
+
+    def on_key(self, event):
+        if self.disabled:
+            event.stop()
+
+    def on_mouse_down(self, event):
+        if self.disabled:
+            event.stop()
+
     def on_mount(self):
-        self.add_columns(
-            "Name",
-            "Size",
-            "Modified"
-        )
+        self.add_columns("Name", "Size", "Modified")
 
         self.item = []
         self.filtered_items = []
@@ -26,9 +34,8 @@ class FileTable(DataTable):
             self.filtered_items = self.items
         else:
             self.filtered_items = [
-                f for f in self.items
-                if fnmatch.fnmatch(f["name"], pattern)
-             ]
+                f for f in self.items if fnmatch.fnmatch(f["name"], pattern)
+            ]
         self.refresh_table()
 
     def refresh_table(self):
@@ -38,11 +45,7 @@ class FileTable(DataTable):
             name = f["name"]
             if f.get("is_dir"):
                 name = "/ " + name
-            self.add_row(
-                name,
-                str(f.get("size", "")),
-                str(f.get("modified", ""))
-            )
+            self.add_row(name, str(f.get("size", "")), str(f.get("modified", "")))
 
     def selected(self):
         if self.cursor_row is None:

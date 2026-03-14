@@ -1,5 +1,6 @@
-import yaml
 from pathlib import Path
+
+import yaml
 
 DEFAULT_CONFIG = {
     "server": None,
@@ -7,13 +8,12 @@ DEFAULT_CONFIG = {
     "token": None,
 }
 
+
 def load_config():
     path = Path.home() / ".arty-mc.yml"
 
     if not path.exists():
-        raise RuntimeError(
-                "Config file missing: ~/.arty-mc.yml"
-        )
+        raise RuntimeError("Config file missing: ~/.arty-mc.yml")
 
     with open(path) as f:
         data = yaml.safe_load(f)

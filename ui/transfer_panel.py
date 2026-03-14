@@ -1,12 +1,13 @@
-from textual.widget import Widget
-from textual.widgets import ProgressBar, Static
-from textual.containers import Vertical
-from textual.reactive import reactive
-
 import threading
 
+from textual.containers import Vertical
+from textual.message import Message
+from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import ProgressBar, Static
 
-def human_bytes(n: int) -> str:
+
+def human_bytes(n: float) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
     i = 0
     n = float(n)
@@ -19,7 +20,6 @@ def human_bytes(n: int) -> str:
 
 
 class TransferPanel(Widget):
-
     DEFAULT_CSS = """
     TransferPanel {
         dock: top;
@@ -31,7 +31,11 @@ class TransferPanel(Widget):
     }
     """
 
-    visible = reactive(False)
+    class CancelRequested(Message):
+        pass
+
+    visible: bool
+    visible = reactive(False)  # type: ignore[assignment]
 
     def compose(self):
         self.status = Static("Idle")
@@ -64,9 +68,7 @@ class TransferPanel(Widget):
 
         self.progress.update(total=total_bytes, progress=0)
 
-        self.status.update(
-            f"Transfer running... 0 / {human_bytes(total_bytes)}"
-        )
+        self.status.update(f"Transfer running... 0 / {human_bytes(total_bytes)}")
 
         self.visible = True
 
@@ -78,19 +80,14 @@ class TransferPanel(Widget):
             self.transferred = self.total
 
         self.progress.advance(bytes_step)
-
-        percent = (self.transferred / self.total) * 100 if self.total else 0
-
         self.status.update(
-            f"{percent:5.1f}%  {human_bytes(self.transferred)} / {human_bytes(self.total)}"
+            f"{human_bytes(self.transferred)} / {human_bytes(self.total)}"
         )
 
     def _finish_ui(self):
 
         self.progress.update(progress=self.total)
 
-        self.status.update(
-            f"Transfer finished ({human_bytes(self.total)})"
-        )
+        self.status.update(f"Transfer finished ({human_bytes(self.total)})")
 
         self.visible = False

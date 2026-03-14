@@ -1,8 +1,8 @@
-from textual.widget import Widget
 from textual.reactive import reactive
+from textual.widget import Widget
+
 
 class PathLine(Widget):
-
     DEFAULT_CSS = """
     PathLine {
         height: 1;

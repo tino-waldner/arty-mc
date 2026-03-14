@@ -1,10 +1,10 @@
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.containers import Vertical, Horizontal, Middle, Center
-from textual.widgets import Static, Button, Label
+from textual.widgets import Button, Label, Static
+
 
 class ConfirmDialog(ModalScreen[bool]):
-
-    DEFAULT_CSS="""
+    DEFAULT_CSS = """
     ConfirmDialog {
         align: center middle;
     }
@@ -49,17 +49,15 @@ class ConfirmDialog(ModalScreen[bool]):
         super().__init__()
         self.message = message
 
-
     def compose(self):
         with Vertical(id="dialog"):
-            #yield Static(self.message)
+            # yield Static(self.message)
             with Static():
                 yield Label(self.message, classes="dialog-message")
 
                 with Horizontal(id="dialog-buttons"):
                     yield Button("Yes", id="yes", variant="success")
                     yield Button("No", id="no", variant="error")
-
 
     def on_button_pressed(self, event: Button.Pressed):
 
@@ -68,4 +66,3 @@ class ConfirmDialog(ModalScreen[bool]):
 
         if event.button.id == "no":
             self.dismiss(False)
-

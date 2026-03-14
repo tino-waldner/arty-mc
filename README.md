@@ -144,6 +144,7 @@ This starts the **dual-pane interface** where you can browse your local filesyst
 | ↑ ↓   | Navigate files   |
 | Enter | Open directory   |
 | Tab   | Switch pane      |
+| F2    | Cancel Operation |
 | F5    | Copy file        |
 | F8    | Delete file      |
 | F10   | Quit             |
@@ -193,7 +194,7 @@ You can run it without a Python environment.
 
 # Demo
 
-[![Demo Cast](https://asciinema.org/a/pRa6qDgG33SSblqC.svg)](https://asciinema.org/a/pRa6qDgG33SSblqC)
+[![Demo Cast](https://asciinema.org/a/wjutM4fkY9r3n05n.svg)](https://asciinema.org/a/wjutM4fkY9r3n05n)
 
 ---
 

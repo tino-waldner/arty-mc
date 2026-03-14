@@ -1,12 +1,11 @@
-from textual.widget import Widget
-from textual.widgets import ProgressBar, Static
 from textual.containers import Vertical
 from textual.reactive import reactive
-from textual import events
+from textual.widget import Widget
+from textual.widgets import ProgressBar, Static
+
 
 class DeletePanel(Widget):
-
-    DEFAULT_CSS="""
+    DEFAULT_CSS = """
     DeletePanel {
         dock: top;
         width: 100%;
@@ -17,7 +16,7 @@ class DeletePanel(Widget):
     }
     """
 
-    visible = reactive(False)
+    visible = reactive(False)  # type: ignore[assignment]
 
     def compose(self):
         self.status = Static("Idle")

@@ -1,11 +1,10 @@
+from textual import on
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Input
-from textual.message import Message
-from textual.app import App, ComposeResult
-from textual import on
+
 
 class FilterBar(Widget):
-
     DEFAULT_CSS = """
     FilterBar {
         height: 3;

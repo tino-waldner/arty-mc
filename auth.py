@@ -1,7 +1,7 @@
 import requests
 
-class AuthSession:
 
+class AuthSession:
     def __init__(self, base, user, token):
         self.base = base.rstrip("/")
         self.session = requests.Session()

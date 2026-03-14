@@ -1,24 +1,29 @@
 import asyncio
-import os
 from pathlib import Path
-from artifactory import ArtifactoryPath
-from requests import Session
-from requests.adapters import HTTPAdapter
+from typing import Optional
+
+from artifactory import ArtifactoryPath  # type: ignore
+from requests import Session  # type: ignore
+from requests.adapters import HTTPAdapter  # type: ignore
 from urllib3.util.retry import Retry
 
 CHUNK_SIZE = 4 * 1024 * 1024
-CONCURRENCY_LIMIT = 3
+CONCURRENCY_LIMIT = 4
 
 
 class ProgressFile:
-
-    def __init__(self, path: Path, callback=None):
+    def __init__(
+        self, path: Path, callback=None, cancel_event: Optional[asyncio.Event] = None
+    ):
         self.file = open(path, "rb")
         self.callback = callback
         self.size = path.stat().st_size
         self.read_bytes = 0
+        self.cancel_event = cancel_event or asyncio.Event()
 
     def read(self, size=-1):
+        if self.cancel_event and self.cancel_event.is_set():
+            raise asyncio.CancelledError()
         chunk = self.file.read(size)
         if chunk:
             self.read_bytes += len(chunk)
@@ -37,7 +42,6 @@ class ProgressFile:
 
 
 def create_session():
-
     retry = Retry(
         total=3,
         connect=3,
@@ -46,29 +50,32 @@ def create_session():
         status_forcelist=[500, 502, 503, 504],
         allowed_methods=["GET", "PUT", "HEAD"],
     )
-
     adapter = HTTPAdapter(
         max_retries=retry,
         pool_connections=CONCURRENCY_LIMIT,
         pool_maxsize=CONCURRENCY_LIMIT,
     )
-
     session = Session()
     session.mount("http://", adapter)
     session.mount("https://", adapter)
-
     return session
 
 
-def upload_file(local_file: Path, remote_url: str, session: Session, auth=None, progress_callback=None):
+def upload_file(
+    local_file: Path,
+    remote_url: str,
+    session: Session,
+    auth=None,
+    progress_callback=None,
+    cancel_event: Optional[asyncio.Event] = None,
+):
+    if cancel_event is None:
+        cancel_event = asyncio.Event()
 
     total = local_file.stat().st_size
-
     if progress_callback:
         progress_callback("start", total)
-
-    pf = ProgressFile(local_file, progress_callback)
-
+    pf = ProgressFile(local_file, progress_callback, cancel_event)
     try:
         r = session.put(
             remote_url,
@@ -79,7 +86,6 @@ def upload_file(local_file: Path, remote_url: str, session: Session, auth=None, 
         r.raise_for_status()
     finally:
         pf.close()
-
     if progress_callback:
         progress_callback("finish", None)
 
@@ -87,78 +93,109 @@ def upload_file(local_file: Path, remote_url: str, session: Session, auth=None, 
 upload_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
 
-async def upload_file_limited(local_file: Path, remote_url: str, session: Session, auth=None, progress_callback=None):
+async def upload_file_limited(
+    local_file: Path,
+    remote_url: str,
+    session: Session,
+    auth=None,
+    progress_callback=None,
+    cancel_event: Optional[asyncio.Event] = None,
+):
+    if cancel_event is None:
+        cancel_event = asyncio.Event()
+
     async with upload_semaphore:
-        await asyncio.to_thread(upload_file, local_file, remote_url, session, auth, progress_callback)
+        await asyncio.to_thread(
+            upload_file,
+            local_file,
+            remote_url,
+            session,
+            auth,
+            progress_callback,
+            cancel_event,
+        )
 
 
-async def upload(local_path: str, remote_path: str, remote_repo_url=None, auth=None, progress_callback=None):
+async def upload(
+    local_path: Path,
+    remote_path: str,
+    remote_repo_url=None,
+    auth=None,
+    progress_callback=None,
+    cancel_event: Optional[asyncio.Event] = None,
+):
+    if cancel_event is None:
+        cancel_event = asyncio.Event()
 
     local_path = Path(local_path)
-
-    files = []
 
     if local_path.is_file():
         files = [local_path]
         base = local_path.parent
+        top_folder_name = None
     else:
-        base = local_path.parent
-        for root, _, fs in os.walk(local_path):
-            for f in fs:
-                if f.startswith("."):
-                    continue
-                files.append(Path(root) / f)
+        files = [f for f in local_path.rglob("*") if f.is_file()]
+        base = local_path
+        top_folder_name = local_path.name
 
     total_bytes = sum(f.stat().st_size for f in files)
-
     if progress_callback:
         progress_callback("start", total_bytes)
 
     session = create_session()
-
     tasks = []
 
     for file in files:
-
         rel = file.relative_to(base)
-
+        if top_folder_name:
+            rel = Path(top_folder_name) / rel
         remote_url = "/".join(
-            part.strip("/") for part in [remote_repo_url, remote_path, rel.as_posix()] if part
+            part.strip("/")
+            for part in [remote_repo_url, remote_path, rel.as_posix()]
+            if part
         )
-
         tasks.append(
-            upload_file_limited(file, remote_url, session, auth, progress_callback)
+            upload_file_limited(
+                file, remote_url, session, auth, progress_callback, cancel_event
+            )
         )
 
-    await asyncio.gather(*tasks)
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        pass
 
     if progress_callback:
         progress_callback("finish", None)
 
 
-def download_file(remote_file: ArtifactoryPath, local_file: Path, session: Session, auth=None, progress_callback=None):
+def download_file(
+    remote_file: ArtifactoryPath,
+    local_file: Path,
+    session: Session,
+    auth=None,
+    progress_callback=None,
+    cancel_event: Optional[asyncio.Event] = None,
+):
+
+    if cancel_event is None:
+        cancel_event = asyncio.Event()
 
     total = remote_file.stat().st_size
-
     if progress_callback:
         progress_callback("start", total)
 
+    local_file.parent.mkdir(parents=True, exist_ok=True)
     downloaded = 0
 
-    local_file.parent.mkdir(parents=True, exist_ok=True)
-
     with session.get(str(remote_file), stream=True, auth=auth) as r:
-
         r.raise_for_status()
-
         with open(local_file, "wb") as f:
-
             for chunk in r.iter_content(CHUNK_SIZE):
-
+                if cancel_event and cancel_event.is_set():
+                    raise asyncio.CancelledError()
                 f.write(chunk)
-
                 downloaded += len(chunk)
-
                 if progress_callback:
                     progress_callback("advance", len(chunk))
 
@@ -169,45 +206,66 @@ def download_file(remote_file: ArtifactoryPath, local_file: Path, session: Sessi
 download_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
 
-async def download_file_limited(remote_file: ArtifactoryPath, local_file: Path, session: Session, auth=None, progress_callback=None):
+async def download_file_limited(
+    remote_file: ArtifactoryPath,
+    local_file: Path,
+    session: Session,
+    auth=None,
+    progress_callback=None,
+    cancel_event: Optional[asyncio.Event] = None,
+):
+
+    if cancel_event is None:
+        cancel_event = asyncio.Event()
+
     async with download_semaphore:
-        await asyncio.to_thread(download_file, remote_file, local_file, session, auth, progress_callback)
+        await asyncio.to_thread(
+            download_file,
+            remote_file,
+            local_file,
+            session,
+            auth,
+            progress_callback,
+            cancel_event,
+        )
 
 
-async def download(remote_path: str, local_path: str, remote_repo_url=None, auth=None, progress_callback=None):
+async def download(
+    remote_path: str,
+    local_path: str,
+    remote_repo_url=None,
+    auth=None,
+    progress_callback=None,
+    cancel_event: Optional[asyncio.Event] = None,
+):
+
+    if cancel_event is None:
+        cancel_event = asyncio.Event()
 
     if remote_repo_url is None:
         raise ValueError("remote_repo_url is None")
 
     session = create_session()
-
     local_base = Path(local_path)
-
     remote = ArtifactoryPath(f"{remote_repo_url}/{remote_path}", auth=auth)
-
     files = []
 
     if remote.is_file():
-
         files.append((remote, local_base / remote.name))
-
     else:
-
-        top_folder = Path(remote.name)
-
-        local_base = local_base / top_folder
-
+        top_folder_name = Path(remote.name).name
+        local_base = local_base / top_folder_name
         for item in remote.glob("**/*"):
-
             if item.is_file():
-
                 relative = item.relative_to(remote)
-
                 files.append((item, local_base / relative))
 
     tasks = [
-        download_file_limited(rf, lf, session, auth, progress_callback)
+        download_file_limited(rf, lf, session, auth, progress_callback, cancel_event)
         for rf, lf in files
     ]
 
-    await asyncio.gather(*tasks)
+    try:
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        pass

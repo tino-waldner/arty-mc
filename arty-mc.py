@@ -1,4 +1,5 @@
 import sys
+
 from textual.app import App
 
 from config import load_config
@@ -7,6 +8,7 @@ from ui.commander_screen import CommanderScreen
 
 class artymc(App):
     TITLE = "Arty-Mc"
+
     def __init__(self, repo):
         super().__init__()
         self.repo = repo
@@ -15,9 +17,7 @@ class artymc(App):
         config = load_config()
         config["default_repo"] = self.repo
 
-        self.push_screen(
-            CommanderScreen(config)
-        )
+        self.push_screen(CommanderScreen(config))
 
 
 if __name__ == "__main__":
