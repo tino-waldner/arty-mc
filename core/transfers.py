@@ -6,7 +6,7 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-CHUNK_SIZE = 1024 * 1024
+CHUNK_SIZE = 4 * 1024 * 1024
 CONCURRENCY_LIMIT = 3
 
 
