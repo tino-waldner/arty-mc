@@ -1,5 +1,5 @@
-from textual.reactive import reactive
-from textual.widget import Widget
+from textual.reactive import reactive  # type: ignore
+from textual.widget import Widget  # type: ignore
 
 
 class PathLine(Widget):

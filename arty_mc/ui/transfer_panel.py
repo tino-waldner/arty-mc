@@ -1,10 +1,10 @@
 import threading
 
-from textual.containers import Vertical
-from textual.message import Message
-from textual.reactive import reactive
-from textual.widget import Widget
-from textual.widgets import ProgressBar, Static
+from textual.containers import Vertical  # type: ignore
+from textual.message import Message  # type: ignore
+from textual.reactive import reactive  # type: ignore
+from textual.widget import Widget  # type: ignore
+from textual.widgets import ProgressBar, Static  # type: ignore
 
 
 def human_bytes(n: float) -> str:

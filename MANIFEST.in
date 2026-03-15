@@ -1,0 +1,4 @@
+include README.md
+include LICENSE
+recursive-include arty_mc *.py
+recursive-include media *.png

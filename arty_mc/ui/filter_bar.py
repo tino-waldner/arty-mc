@@ -1,7 +1,7 @@
-from textual import on
-from textual.message import Message
-from textual.widget import Widget
-from textual.widgets import Input
+from textual import on  # type: ignore
+from textual.message import Message  # type: ignore
+from textual.widget import Widget  # type: ignore
+from textual.widgets import Input  # type: ignore
 
 
 class FilterBar(Widget):

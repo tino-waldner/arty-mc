@@ -3,7 +3,7 @@ from datetime import datetime
 import requests  # type: ignore
 from artifactory import ArtifactoryException, ArtifactoryPath  # type: ignore
 
-from auth import AuthSession
+from arty_mc.auth import AuthSession
 
 
 class ArtifactoryAPI:
@@ -19,6 +19,7 @@ class ArtifactoryAPI:
     def list_folder(self, repo, path=""):
         repo_path = f"{repo}/{path.lstrip('/').rstrip('/')}"
         full_url = f"{self.base_url}/{repo_path}"
+
         items = []
 
         try:
@@ -26,28 +27,33 @@ class ArtifactoryAPI:
 
             for child in folder.iterdir():
                 st = child.stat()
-                size = st.st_size if st and not st.is_dir else "-"
+                is_dir = st.is_dir
 
-                if isinstance(st.mtime, (int, float)):
-                    modified = datetime.fromtimestamp(st.st_mtime).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                elif isinstance(st.mtime, datetime):
-                    modified = st.mtime.strftime("%Y-%m-%d %H:%M:%S")
+                size = "-" if is_dir else getattr(st, "size", 0)
+
+                modified_dt = getattr(st, "last_modified", None)
+                if modified_dt is None:
+                    try:
+                        props = child.properties
+                        modified_dt = props.get("lastModified")
+                    except Exception:
+                        modified_dt = None
+
+                if isinstance(modified_dt, datetime):
+                    modified = modified_dt.strftime("%Y-%m-%d %H:%M:%S")
                 else:
                     modified = None
 
                 items.append(
                     {
                         "name": child.name,
-                        "is_dir": st.is_dir,
+                        "is_dir": is_dir,
                         "size": size,
                         "modified": modified,
                     }
                 )
+
             return items
+
         except (ArtifactoryException, requests.exceptions.RequestException) as e:
             raise RuntimeError(f"Cannot reach Artifactory server API: {e}")
-
-    def properties(self, repo, path):
-        return self.session.get(f"/api/storage/{repo}/{path}")

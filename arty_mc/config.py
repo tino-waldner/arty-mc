@@ -11,10 +11,6 @@ DEFAULT_CONFIG = {
 
 
 def is_valid_url(url: str) -> bool:
-    """
-    Check if the URL starts with http:// or https:// and is followed
-    by a valid domain or IPv4 address.
-    """
     pattern = re.compile(
         r"^(https?://)"
         r"(([a-zA-Z0-9.-]+)|"

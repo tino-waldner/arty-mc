@@ -70,13 +70,13 @@ cd arty-mc
 
 ---
 
-## 2. Create a Python Virtual Environment
+## 2. Install arty-mc package
 
 ```bash
 mkdir .venv
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install .
 ```
 
 ---
@@ -112,13 +112,13 @@ token: ********************************************
 Run the tool directly:
 
 ```bash
-python arty-mc.py <repository>
+python -m arty_mc <repository>
 ```
 
 Example:
 
 ```bash
-python arty-mc.py libs-release-local
+python -m arty_mc libs-release-local
 ```
 
 This starts the **dual-pane interface** where you can browse your local filesystem and the selected repository.
@@ -166,18 +166,73 @@ Build the binary:
 **-—onefile:** slower startup caused by runtime extraction
 
 ```bash
-pyinstaller --onefile --distpath dist --name arty-mc arty-mc.py
+pyinstaller --onefile --distpath dist --name arty-mc arty_mc/arty_mc.py
 ```
 **-—onedir:** faster after initial startup
 
 ```bash
-pyinstaller --onedir --distpath dist --name arty-mc arty-mc.py
+pyinstaller --onedir --distpath dist --name arty-mc arty_mc/arty_mc.py
 ```
 
 The compiled executable will appear in:
 
 ```text
 dist/arty-mc/
+```
+
+You can run it without a Python environment.
+
+---
+
+# Building and upload the arty-mc Python Package
+
+You can also build this python package
+
+```bash
+git clone https://github.com/your-org/arty-mc.git
+cd arty-mc
+mkdir .venv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install build twine
+python -m build
+twine check dist/*
+twine upload dist/*
+```
+
+---
+
+# Building an Executable with Pyinstaller
+
+```bash
+mkdir .venv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
+```
+Install PyInstaller:
+
+```bash
+pip install pyinstaller
+```
+
+Build the binary:
+
+**-—onefile:** slower startup caused by runtime extraction
+
+```bash
+pyinstaller --onefile --distpath dist --name arty-mc arty_mc/arty_mc.py
+```
+**-—onedir:** faster after initial startup
+
+```bash
+pyinstaller --onedir --distpath dist --name arty-mc arty_mc/arty_mc.py
+```
+
+The compiled executable will appear in:
+
+```text
+arty_mc/dist/arty-mc/
 ```
 
 You can run it without a Python environment.

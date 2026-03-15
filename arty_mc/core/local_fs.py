@@ -6,6 +6,12 @@ from typing import Optional
 MAX_CONCURRENCY = 4
 
 
+class FileEntry:
+    def __init__(self, path: str, is_dir: bool):
+        self.path = path
+        self.is_dir = is_dir
+
+
 class LocalFS:
     def __init__(self):
         self.cwd = os.getcwd()
@@ -13,10 +19,6 @@ class LocalFS:
     def list(self):
         items = []
         for e in os.scandir(self.cwd):
-            stat = None
-            is_dir = False
-            size = 0
-            modified = None
             try:
                 stat = e.stat(follow_symlinks=False) if e.is_symlink() else e.stat()
                 is_dir = e.is_dir(follow_symlinks=False)
@@ -27,7 +29,9 @@ class LocalFS:
                     else None
                 )
             except Exception:
-                pass
+                is_dir = False
+                size = 0
+                modified = None
             items.append(
                 {
                     "name": e.name,
@@ -56,19 +60,26 @@ class LocalFS:
         cancel_event: Optional[asyncio.Event] = None,
     ):
         cancel_event = cancel_event or asyncio.Event()
+
         path = os.path.normpath(self.path(name))
+
         if not os.path.exists(path):
             return
 
         items_to_delete = []
-        for dirpath, dirnames, filenames in os.walk(path, topdown=False):
-            for f in filenames:
-                items_to_delete.append(os.path.join(dirpath, f))
-            for d in dirnames:
-                items_to_delete.append(os.path.join(dirpath, d))
-        items_to_delete.append(path)
+
+        if os.path.isdir(path):
+            for dirpath, dirnames, filenames in os.walk(path, topdown=False):
+                for f in filenames:
+                    items_to_delete.append(os.path.join(dirpath, f))
+                for d in dirnames:
+                    items_to_delete.append(os.path.join(dirpath, d))
+            items_to_delete.append(path)
+        else:
+            items_to_delete.append(path)
 
         total = len(items_to_delete)
+
         if progress_callback:
             progress_callback("start", total)
 
@@ -85,7 +96,7 @@ class LocalFS:
         if progress_callback:
             progress_callback("finish", None)
 
-    def _delete_item(self, path, progress_callback=None):
+    def _delete_item(self, path, progress_callback=None, dry_run: bool = False):
         try:
             if os.path.isfile(path) or os.path.islink(path):
                 os.remove(path)

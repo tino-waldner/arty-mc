@@ -1,6 +1,6 @@
-from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
-from textual.widgets import Button, Label, Static
+from textual.containers import Horizontal, Vertical  # type: ignore
+from textual.screen import ModalScreen  # type: ignore
+from textual.widgets import Button, Label, Static  # type: ignore
 
 
 class ConfirmDialog(ModalScreen[bool]):
@@ -51,7 +51,6 @@ class ConfirmDialog(ModalScreen[bool]):
 
     def compose(self):
         with Vertical(id="dialog"):
-            # yield Static(self.message)
             with Static():
                 yield Label(self.message, classes="dialog-message")
 
