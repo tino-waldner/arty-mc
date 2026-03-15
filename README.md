@@ -61,27 +61,13 @@ For developers who prefer working directly in the terminal, this can be inconven
 
 # Installation
 
-## 1. Clone the Repository
-
 ```bash
-git clone https://github.com/tino-waldner/arty-mc.git
-cd arty-mc
+pip install arty-mc
 ```
 
 ---
 
-## 2. Python Package
-
-```bash
-mkdir .venv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install .
-```
-
----
-
-## 3. Create Configuration File
+## Create Configuration File
 
 Create a configuration file in your home directory:
 
