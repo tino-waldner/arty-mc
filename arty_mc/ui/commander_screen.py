@@ -62,7 +62,6 @@ class CommanderScreen(Screen):
                 yield self.remote_filter
                 yield self.remote_path_line
                 yield self.remote_table
-
         yield Footer()
 
     def on_mount(self):

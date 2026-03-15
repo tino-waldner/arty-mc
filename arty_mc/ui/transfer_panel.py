@@ -62,18 +62,13 @@ class TransferPanel(Widget):
         self._dispatch(self._finish_ui)
 
     def _start_ui(self, total_bytes: int):
-
         self.total = total_bytes
         self.transferred = 0
-
         self.progress.update(total=total_bytes, progress=0)
-
         self.status.update(f"Transfer running... 0 / {human_bytes(total_bytes)}")
-
         self.visible = True
 
     def _advance_ui(self, bytes_step: int):
-
         self.transferred += bytes_step
 
         if self.transferred > self.total:
@@ -85,9 +80,6 @@ class TransferPanel(Widget):
         )
 
     def _finish_ui(self):
-
         self.progress.update(progress=self.total)
-
         self.status.update(f"Transfer finished ({human_bytes(self.total)})")
-
         self.visible = False

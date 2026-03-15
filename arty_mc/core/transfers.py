@@ -85,7 +85,6 @@ def upload_file(
     cancel_event=None,
 ):
     cancel_event = cancel_event or asyncio.Event()
-
     pf = ProgressFile(entry.local, progress_callback, cancel_event)
 
     try:
@@ -116,7 +115,6 @@ async def expand_upload_entries(
             expanded.append(entry)
             continue
 
-        # Ensure the directory exists remotely
         remote_root = ArtifactoryPath(entry.remote, auth=auth)
 
         for local_path in entry.local.rglob("*"):
@@ -124,7 +122,6 @@ async def expand_upload_entries(
             remote_path = str(remote_root / rel)
 
             if local_path.is_dir():
-                # Skip directories, Artifactory auto-creates parent dirs on upload
                 continue
             else:
                 expanded.append(
@@ -143,7 +140,6 @@ async def upload(
 ):
     cancel_event = cancel_event or asyncio.Event()
     session = create_session()
-
     entries = await expand_upload_entries(entries, auth)
 
     total_bytes = sum(
@@ -174,9 +170,7 @@ def download_file(
     cancel_event=None,
 ):
     cancel_event = cancel_event or asyncio.Event()
-
     remote_file = ArtifactoryPath(entry.remote, auth=auth)
-
     entry.local.parent.mkdir(parents=True, exist_ok=True)
 
     with session.get(str(remote_file), stream=True, auth=auth) as r:
@@ -212,7 +206,6 @@ async def expand_entries(entries: List[TransferEntry], auth) -> List[TransferEnt
             continue
 
         root = ArtifactoryPath(entry.remote, auth=auth)
-
         entry.local.mkdir(parents=True, exist_ok=True)
 
         for child in root.rglob("*"):
@@ -238,12 +231,8 @@ async def download(
     entries: List[TransferEntry], auth=None, progress_callback=None, cancel_event=None
 ):
     cancel_event = cancel_event or asyncio.Event()
-
     session = create_session()
-
-    # Expand directories
     entries = await expand_entries(entries, auth)
-
     total_bytes = 0
 
     for entry in entries:

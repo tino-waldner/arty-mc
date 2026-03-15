@@ -96,7 +96,7 @@ class LocalFS:
         if progress_callback:
             progress_callback("finish", None)
 
-    def _delete_item(self, path, progress_callback=None, dry_run: bool = False):
+    def _delete_item(self, path, progress_callback=None):
         try:
             if os.path.isfile(path) or os.path.islink(path):
                 os.remove(path)

@@ -67,7 +67,6 @@ class ArtifactoryFS:
         entry,
         progress_callback=None,
         cancel_event: Optional[asyncio.Event] = None,
-        dry_run: bool = False,
     ):
 
         cancel_event = cancel_event or asyncio.Event()
@@ -87,9 +86,7 @@ class ArtifactoryFS:
             if cancel_event.is_set():
                 return
             async with semaphore:
-                await asyncio.to_thread(
-                    self._delete_item, item, progress_callback, dry_run
-                )
+                await asyncio.to_thread(self._delete_item, item, progress_callback)
 
         while delete_queue:
             current = delete_queue.pop(0)
@@ -116,13 +113,9 @@ class ArtifactoryFS:
         if progress_callback:
             progress_callback("finish", None)
 
-    def _delete_item(self, item, progress_callback=None, dry_run=False):
+    def _delete_item(self, item, progress_callback=None):
         """Delete a single file or empty folder."""
         try:
-            if dry_run:
-                print(f"[DRY RUN] Would delete: {item}")
-                return
-
             if item.is_file():
                 item.unlink()
             elif item.is_dir():

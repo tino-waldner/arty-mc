@@ -12,10 +12,6 @@ class ArtifactoryAPI:
         self.base_url = config["server"].rstrip("/")
         self.apikey = config["token"].rstrip("/")
 
-    def list_repositories(self):
-        data = self.session.get("/api/repositories")
-        return [r["key"] for r in data]
-
     def list_folder(self, repo, path=""):
         repo_path = f"{repo}/{path.lstrip('/').rstrip('/')}"
         full_url = f"{self.base_url}/{repo_path}"
@@ -28,9 +24,7 @@ class ArtifactoryAPI:
             for child in folder.iterdir():
                 st = child.stat()
                 is_dir = st.is_dir
-
                 size = "-" if is_dir else getattr(st, "size", 0)
-
                 modified_dt = getattr(st, "last_modified", None)
                 if modified_dt is None:
                     try:
