@@ -184,7 +184,7 @@ You can run it without a Python environment.
 
 ---
 
-# Building and upload the arty-mc Python Package
+# Packaging and uploading the arty-mc Python library
 
 You can also build this python package
 
