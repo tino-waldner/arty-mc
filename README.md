@@ -64,7 +64,7 @@ For developers who prefer working directly in the terminal, this can be inconven
 ## 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/arty-mc.git
+git clone https://github.com/tino-waldner/arty-mc.git
 cd arty-mc
 ```
 
