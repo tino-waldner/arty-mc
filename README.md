@@ -189,7 +189,7 @@ You can run it without a Python environment.
 You can also build this python package
 
 ```bash
-git clone https://github.com/your-org/arty-mc.git
+git clone https://github.com/tino-waldner/arty-mc.git
 cd arty-mc
 mkdir .venv
 python3 -m venv .venv
