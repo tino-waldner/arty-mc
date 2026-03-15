@@ -21,7 +21,7 @@
 
 ```
 
-**arty-mc** is a terminal file manager for JFrog Artifactory.
+**arty-mc** is a **Python package** providing a terminal file manager for JFrog Artifactory.
 
 It provides a **dual-pane interface similar to Midnight Commander**, allowing you to **browse, filter, copy and delete** files and folders between **the local filesystem and Artifactory repositories** directly from the terminal.
 
@@ -70,7 +70,7 @@ cd arty-mc
 
 ---
 
-## 2. Install arty-mc package
+## 2. Python Package
 
 ```bash
 mkdir .venv
