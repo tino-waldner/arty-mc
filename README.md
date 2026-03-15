@@ -188,43 +188,6 @@ twine upload dist/*
 
 ---
 
-# Building an Executable with Pyinstaller
-
-```bash
-mkdir .venv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-Install PyInstaller:
-
-```bash
-pip install pyinstaller
-```
-
-Build the binary:
-
-**-—onefile:** slower startup caused by runtime extraction
-
-```bash
-pyinstaller --onefile --distpath dist --name arty-mc arty_mc/arty_mc.py
-```
-**-—onedir:** faster after initial startup
-
-```bash
-pyinstaller --onedir --distpath dist --name arty-mc arty_mc/arty_mc.py
-```
-
-The compiled executable will appear in:
-
-```text
-arty_mc/dist/arty-mc/
-```
-
-You can run it without a Python environment.
-
----
-
 # Security Notes
 
 * Do **not** commit your `.arty-mc.yml` file
