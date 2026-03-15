@@ -249,7 +249,7 @@ You can run it without a Python environment.
 
 # Demo
 
-[![Demo Cast](https://asciinema.org/a/wjutM4fkY9r3n05n.svg)](https://asciinema.org/a/wjutM4fkY9r3n05n)
+[![Demo Cast](https://asciinema.org/a/WHdbkcCi2WBvoTrX.svg)](https://asciinema.org/a/WHdbkcCi2WBvoTrX)
 
 ---
 
