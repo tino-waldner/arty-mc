@@ -1,6 +1,6 @@
 # arty-mc
 
-![Python](https://img.shields.io/badge/python-3+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
 ![Status](https://img.shields.io/badge/status-experimental-orange.svg)
@@ -53,7 +53,7 @@ For developers who prefer working directly in the terminal, this can be inconven
 
 # Requirements
 
-* Python **3+**
+* Python **3.9+**
 * Access to an **Artifactory server**
 * Artifactory **API token**
 
