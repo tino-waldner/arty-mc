@@ -1,4 +1,7 @@
-from textual import on  # type: ignore
+from textual import (
+    events,  # type: ignore
+    on,  # type: ignore
+)
 from textual.message import Message  # type: ignore
 from textual.widget import Widget  # type: ignore
 from textual.widgets import Input  # type: ignore
@@ -28,3 +31,11 @@ class FilterBar(Widget):
     @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         self.post_message(self.Changed(self, event.value))
+
+    def on_input_submitted(self, event):
+        self.app.set_focus(self.app.screen.get_active())  # type: ignore[attr-defined]
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "tab":
+            event.stop()
+            self.app.set_focus(self.app.screen.get_active())  # type: ignore[attr-defined]
