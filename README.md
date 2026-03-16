@@ -198,7 +198,7 @@ twine upload dist/*
 
 # Demo
 
-[![Demo Cast](https://asciinema.org/a/WHdbkcCi2WBvoTrX.svg)](https://asciinema.org/a/WHdbkcCi2WBvoTrX)
+[![Demo Cast](https://asciinema.org/a/z7YyqgkpNMyvFUWi.svg)](https://asciinema.org/a/z7YyqgkpNMyvFUWi)
 
 ---
 
