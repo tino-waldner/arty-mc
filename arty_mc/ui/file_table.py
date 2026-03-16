@@ -7,6 +7,12 @@ from textual.widgets import DataTable  # type: ignore
 class FileTable(DataTable):
     can_focus = True
 
+    DEFAULT_CSS = """
+    FileTable {
+        height: 1fr;
+    }
+    """
+
     def on_mount(self) -> None:
         """Initialize columns and internal state."""
         self.add_columns("Name", "Size", "Modified")
@@ -35,6 +41,7 @@ class FileTable(DataTable):
         if not pattern.strip():
             self.filtered_items = self.items.copy()
         else:
+            pattern = f"*{pattern}*"
             self.filtered_items = [
                 f for f in self.items if fnmatch.fnmatch(f["name"], pattern)
             ]
