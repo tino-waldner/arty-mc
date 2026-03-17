@@ -1,5 +1,7 @@
 # arty-mc
 
+![CI](https://github.com/tino-waldner/arty-mc/actions/workflows/ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/tino-waldner/arty-mc/branch/main/graph/badge.svg)](https://codecov.io/gh/tino-waldner/arty-mc)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
