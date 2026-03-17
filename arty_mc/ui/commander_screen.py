@@ -113,7 +113,7 @@ class CommanderScreen(Screen):
             if action == "start":
                 self.transfer_panel.start(value)
             elif action == "advance":
-                self.transfer_panel.advance(value)
+                self.transfer_panel.advance(value)  #
             elif action == "finish":
                 self.transfer_panel.finish()
 
@@ -160,7 +160,7 @@ class CommanderScreen(Screen):
             await self.worker.wait()
             self.refresh_local()
 
-        self.transfer_panel.remove()
+        await self.transfer_panel.remove()
         self.local_table.set_enabled(True)
         self.remote_table.set_enabled(True)
         self.local_filter.display = True
@@ -228,7 +228,7 @@ class CommanderScreen(Screen):
         else:
             self.refresh_remote()
 
-        self.delete_panel.remove()
+        await self.delete_panel.remove()
         self.local_table.set_enabled(True)
         self.remote_table.set_enabled(True)
         self.local_filter.display = True

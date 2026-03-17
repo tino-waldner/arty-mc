@@ -52,6 +52,8 @@ class ArtifactoryFS:
             self._cwd = name
 
     def up(self):
+        if not self._cwd:
+            return
         parts = self._cwd.split("/")
         self._cwd = "/".join(parts[:-1])
 
@@ -84,7 +86,7 @@ class ArtifactoryFS:
 
         async def delete_worker(item):
             if cancel_event.is_set():
-                return
+                return  # pragma: no cover
             async with semaphore:
                 await asyncio.to_thread(self._delete_item, item, progress_callback)
 
@@ -114,7 +116,6 @@ class ArtifactoryFS:
             progress_callback("finish", None)
 
     def _delete_item(self, item, progress_callback=None):
-        """Delete a single file or empty folder."""
         try:
             if item.is_file():
                 item.unlink()

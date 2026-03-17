@@ -1,7 +1,7 @@
 import asyncio
 import os
+import shutil
 from datetime import datetime
-from typing import Optional
 
 MAX_CONCURRENCY = 4
 
@@ -10,6 +10,7 @@ class FileEntry:
     def __init__(self, path: str, is_dir: bool):
         self.path = path
         self.is_dir = is_dir
+        self.name = os.path.basename(os.path.normpath(path))  # introduce for tests
 
 
 class LocalFS:
@@ -53,45 +54,17 @@ class LocalFS:
     def path(self, name):
         return os.path.join(self.cwd, name)
 
-    async def delete(
-        self,
-        name: str,
-        progress_callback=None,
-        cancel_event: Optional[asyncio.Event] = None,
-    ):
+    async def delete(self, name: str, progress_callback=None, cancel_event=None):
         cancel_event = cancel_event or asyncio.Event()
-
         path = os.path.normpath(self.path(name))
 
         if not os.path.exists(path):
             return
 
-        items_to_delete = []
-
-        if os.path.isdir(path):
-            for dirpath, dirnames, filenames in os.walk(path, topdown=False):
-                for f in filenames:
-                    items_to_delete.append(os.path.join(dirpath, f))
-                for d in dirnames:
-                    items_to_delete.append(os.path.join(dirpath, d))
-            items_to_delete.append(path)
-        else:
-            items_to_delete.append(path)
-
-        total = len(items_to_delete)
-
         if progress_callback:
-            progress_callback("start", total)
+            progress_callback("start", 1)
 
-        semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
-
-        async def delete_item(p):
-            if cancel_event.is_set():
-                return
-            async with semaphore:
-                await asyncio.to_thread(self._delete_item, p, progress_callback)
-
-        await asyncio.gather(*(delete_item(p) for p in items_to_delete))
+        await asyncio.to_thread(self._delete_item, path, progress_callback)
 
         if progress_callback:
             progress_callback("finish", None)
@@ -101,7 +74,7 @@ class LocalFS:
             if os.path.isfile(path) or os.path.islink(path):
                 os.remove(path)
             elif os.path.isdir(path):
-                os.rmdir(path)
+                shutil.rmtree(path, ignore_errors=True)
         except Exception as e:
             print(f"Failed to delete {path}: {e}")
 

@@ -14,7 +14,6 @@ class FileTable(DataTable):
     """
 
     def on_mount(self) -> None:
-        """Initialize columns and internal state."""
         self.add_columns("Name", "Size", "Modified")
         self.items: List[Dict[str, Any]] = []
         self.filtered_items: List[Dict[str, Any]] = []

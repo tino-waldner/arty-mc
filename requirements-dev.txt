@@ -1,0 +1,15 @@
+textual
+requests
+dohq-artifactory
+pyyaml
+pytest>=8.3
+pytest-asyncio>=0.24
+pytest-cov>=6.0
+pytest-mock>=3.14
+requests-mock>=1.12
+pyfakefs>=5.7
+ruff>=0.9
+pytest-rich
+pytest-xdist
+mypy
+types-requests

@@ -1,7 +1,7 @@
-from textual import (
+from textual import (  # type: ignore
     events,  # type: ignore
     on,  # type: ignore
-)
+)  # type: ignore
 from textual.message import Message  # type: ignore
 from textual.widget import Widget  # type: ignore
 from textual.widgets import Input  # type: ignore

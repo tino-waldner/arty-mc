@@ -50,7 +50,7 @@ class TransferPanel(Widget):
         if threading.current_thread() is threading.main_thread():
             fn(*args)
         else:
-            self.app.call_from_thread(fn, *args)
+            self.app.call_from_thread(fn, *args)  # pragma: no cover
 
     def start(self, total_bytes: int):
         self._dispatch(self._start_ui, total_bytes)

@@ -77,16 +77,11 @@ upload_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 download_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
 
-def upload_file(
-    entry: TransferEntry,
-    session: Session,
-    auth=None,
-    progress_callback=None,
-    cancel_event=None,
-):
+def upload_file(entry, session, auth=None, progress_callback=None, cancel_event=None):
     cancel_event = cancel_event or asyncio.Event()
+    if cancel_event.is_set():
+        return  # early exit if canceled
     pf = ProgressFile(entry.local, progress_callback, cancel_event)
-
     try:
         r = session.put(
             entry.remote, data=pf, auth=auth, headers={"Expect": "100-continue"}
