@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest  # type: ignore
 import pytest_asyncio  # type: ignore
@@ -10,7 +10,7 @@ from arty_mc.ui.file_table import FileTable
 
 
 class _TestFileTableApp(App):
-    def __init__(self, items: List[Dict[str, Any]] | None = None):
+    def __init__(self, items: Optional[List[Dict[str, Any]]] = None):
         super().__init__()
         self.items = items or []
         self.table = FileTable()
