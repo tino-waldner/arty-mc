@@ -109,9 +109,16 @@ python -m arty_mc libs-release-local
 
 This starts the **dual-pane interface** where you can browse your local filesystem and the selected repository.
 
-> ⚠️ **Note:**  
-> `arty-mc` cannot copy empty directories to Artifactory because empty directories are **not supported**.  
-> To ensure a folder is created, add a placeholder file inside it, for example:
+> ⚠️ **Important Note**
+>
+> - **Empty Directories** on your local filesystem are highlighted in **yellow**.  
+>   ❌ These **cannot** be copied to Artifactory as they are **not supported**.
+>
+> - **Dead Symlinks** on your local filesystem are highlighted in **red**.  
+>   ❌ These **cannot** be copied to Artifactory either.
+>
+> 💡 **Tip:**  
+> To ensure a folder is created in Artifactory, add a placeholder file inside it, for example:
 >
 > ```text
 > .keep

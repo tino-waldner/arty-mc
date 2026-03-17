@@ -107,12 +107,19 @@ async def expand_upload_entries(
 
     for entry in entries:
         if not entry.is_dir:
+            if entry.local.is_symlink() and not entry.local.exists():
+                print(f"Skipping dead symlink: {entry.local}")
+                continue
             expanded.append(entry)
             continue
 
         remote_root = ArtifactoryPath(entry.remote, auth=auth)
 
         for local_path in entry.local.rglob("*"):
+            if local_path.is_symlink() and not local_path.exists():
+                print(f"Skipping dead symlink: {local_path}")
+                continue
+
             rel = local_path.relative_to(entry.local)
             remote_path = str(remote_root / rel)
 

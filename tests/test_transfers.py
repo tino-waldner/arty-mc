@@ -521,3 +521,140 @@ async def test_expand_upload_entries_with_file(tmp_path):
     assert expanded[0].local == file_path
     assert expanded[0].remote == "remote/file.txt"
     assert not expanded[0].is_dir
+
+
+@pytest.mark.asyncio
+async def test_expand_upload_entries_ignores_dead_symlinks(tmp_path, monkeypatch):
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    (folder / "file.txt").write_text("content")
+    dead_symlink = folder / "broken"
+    dead_symlink.symlink_to("/non/existent/target")
+
+    class FakeArt:
+        def __init__(self, path, auth=None):
+            pass
+
+        def __truediv__(self, other):
+            return self
+
+        def rglob(self, pattern):
+            return [folder / "file.txt", dead_symlink]
+
+        def relative_to(self, other):
+            return Path(folder / "file.txt").name
+
+    monkeypatch.setattr(transfers, "ArtifactoryPath", FakeArt)
+
+    entry = transfers.TransferEntry(local=folder, remote="remote/folder", is_dir=True)
+    expanded = await transfers.expand_upload_entries([entry])
+
+    assert len(expanded) == 1
+    assert expanded[0].local.name == "file.txt"
+
+
+@pytest.mark.asyncio
+async def test_expand_upload_entries_with_empty_dir(tmp_path, monkeypatch):
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    class FakeArt:
+        def __init__(self, path, auth=None):
+            pass
+
+        def __truediv__(self, other):
+            return self
+
+        def rglob(self, pattern):
+            return []
+
+        def relative_to(self, other):
+            return Path()
+
+    monkeypatch.setattr(transfers, "ArtifactoryPath", FakeArt)
+
+    entry = transfers.TransferEntry(local=empty_dir, remote="remote/empty", is_dir=True)
+    expanded = await transfers.expand_upload_entries([entry])
+
+    assert expanded == []
+
+
+@pytest.mark.asyncio
+async def test_upload_skips_dead_symlink(tmp_path, monkeypatch):
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    (folder / "file.txt").write_text("hello")
+    broken = folder / "broken"
+    broken.symlink_to("/nonexistent")
+
+    class FakeArt:
+        def __init__(self, path, auth=None):
+            pass
+
+        def __truediv__(self, other):
+            return self
+
+        def rglob(self, pattern):
+            return [folder / "file.txt", broken]
+
+        def relative_to(self, other):
+            return Path(folder / "file.txt").name
+
+    monkeypatch.setattr(transfers, "ArtifactoryPath", FakeArt)
+
+    fake_session = MagicMock()
+    fake_response = MagicMock()
+    fake_response.raise_for_status = lambda: None
+    fake_session.put.return_value = fake_response
+    monkeypatch.setattr(transfers, "create_session", lambda: fake_session)
+
+    entry = transfers.TransferEntry(local=folder, remote="remote/folder", is_dir=True)
+    events = []
+
+    def cb(ev, val):
+        events.append((ev, val))
+
+    await transfers.upload([entry], progress_callback=cb)
+    fake_session.put.assert_called_once()
+    assert events[0][0] == "start"
+    assert events[-1][0] == "finish"
+
+
+@pytest.mark.asyncio
+async def test_download_empty_dir(tmp_path, monkeypatch):
+    empty_remote = "remote/empty"
+
+    class FakeArt:
+        def __init__(self, path, auth=None):
+            pass
+
+        def rglob(self, pattern):
+            return []
+
+        def __truediv__(self, other):
+            return self
+
+    monkeypatch.setattr(transfers, "ArtifactoryPath", FakeArt)
+
+    local_path = tmp_path / "empty"
+    local_path.mkdir()
+    entry = transfers.TransferEntry(local=local_path, remote=empty_remote, is_dir=True)
+    expanded = await transfers.expand_entries([entry], auth=None)
+
+    assert expanded == []
+
+
+@pytest.mark.asyncio
+async def test_expand_upload_entries_skips_dead_symlink_file(tmp_path, capsys):
+    dead_file = tmp_path / "broken.txt"
+    dead_file.symlink_to("/non/existent/target")
+
+    entry = transfers.TransferEntry(
+        local=dead_file, remote="remote/broken.txt", is_dir=False
+    )
+
+    expanded = await transfers.expand_upload_entries([entry])
+    assert expanded == []
+    captured = capsys.readouterr()
+    assert "Skipping dead symlink" in captured.out
+    assert str(dead_file) in captured.out

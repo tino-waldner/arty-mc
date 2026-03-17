@@ -108,3 +108,61 @@ async def test_disabled_input_stops_events(table):
     mouse_event = SimpleNamespace(stop=lambda: None)
     table.on_mouse_down(mouse_event)
     assert True
+
+
+@pytest.fixture
+def special_items() -> List[Dict[str, Any]]:
+    return [
+        {"name": "file.txt", "size": 100, "modified": "2026-03-16"},
+        {"name": "folder", "is_dir": True, "modified": "2026-03-14"},
+        {
+            "name": "emptyfolder",
+            "is_dir": True,
+            "is_empty_dir": True,
+            "modified": "2026-03-17",
+        },
+        {"name": "broken_symlink", "is_dead_symlink": True, "modified": "2026-03-17"},
+    ]
+
+
+@pytest_asyncio.fixture
+async def table_with_specials(special_items):
+    app = _TestFileTableApp(special_items)
+    async with app.run_test():
+        yield app.table
+
+
+@pytest.mark.asyncio
+async def test_special_items_flags(table_with_specials):
+    table = table_with_specials
+    table.load(table.items)
+
+    found_empty = False
+    found_dead = False
+
+    for item in table.items:
+        if item.get("is_empty_dir"):
+            found_empty = True
+            assert item["is_empty_dir"] is True
+        if item.get("is_dead_symlink"):
+            found_dead = True
+            assert item["is_dead_symlink"] is True
+
+    assert found_empty, "No empty folder detected in items"
+    assert found_dead, "No dead symlink detected in items"
+
+
+@pytest.mark.asyncio
+async def test_special_items_filtering(table_with_specials):
+    table = table_with_specials
+    table.apply_filter("empty")
+    assert len(table.filtered_items) == 1
+    assert table.filtered_items[0]["name"] == "emptyfolder"
+
+    table.apply_filter("broken")
+    assert len(table.filtered_items) == 1
+    assert table.filtered_items[0]["name"] == "broken_symlink"
+
+    table.apply_filter("file")
+    assert len(table.filtered_items) == 1
+    assert table.filtered_items[0]["name"] == "file.txt"

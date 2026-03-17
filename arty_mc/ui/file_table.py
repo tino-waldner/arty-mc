@@ -1,6 +1,7 @@
 import fnmatch
 from typing import Any, Dict, List, Optional
 
+from rich.text import Text  # type: ignore
 from textual.widgets import DataTable  # type: ignore
 
 
@@ -52,9 +53,15 @@ class FileTable(DataTable):
             name = f["name"]
             if f.get("is_dir"):
                 name = "/ " + name
-            size = str(f.get("size", ""))
-            modified = str(f.get("modified", ""))
-            self.add_row(name, size, modified)
+            style = None
+            if f.get("is_dead_symlink"):
+                style = "red"
+            elif f.get("is_empty_dir"):
+                style = "yellow"
+            name_cell = Text(name, style=style)
+            size_cell = Text(str(f.get("size", "")), style=style)
+            modified_cell = Text(str(f.get("modified", "")), style=style)
+            self.add_row(name_cell, size_cell, modified_cell)
 
     def selected(self) -> Optional[Dict[str, Any]]:
         if self.cursor_row is None or self.cursor_row >= len(self.filtered_items):

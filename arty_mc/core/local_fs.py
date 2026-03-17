@@ -20,19 +20,39 @@ class LocalFS:
     def list(self):
         items = []
         for e in os.scandir(self.cwd):
+            is_dead_symlink = False
+            is_empty_dir = False
+            is_dir = False
+            size = 0
+            modified = None
+
             try:
-                stat = e.stat(follow_symlinks=False) if e.is_symlink() else e.stat()
-                is_dir = e.is_dir(follow_symlinks=False)
-                size = stat.st_size if stat else 0
-                modified = (
-                    datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                    if stat
-                    else None
-                )
+                if e.is_symlink():
+                    if not os.path.exists(e.path):
+                        is_dead_symlink = True
+                    else:
+                        is_dir = e.is_dir(follow_symlinks=True)
+                        stat = e.stat()
+                        size = stat.st_size
+                        modified = datetime.fromtimestamp(stat.st_mtime).strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                else:
+                    is_dir = e.is_dir()
+                    stat = e.stat()
+                    size = stat.st_size
+                    modified = datetime.fromtimestamp(stat.st_mtime).strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
             except Exception:
-                is_dir = False
-                size = 0
-                modified = None
+                pass
+
+            if is_dir:
+                try:
+                    is_empty_dir = len(os.listdir(e.path)) == 0
+                except Exception:
+                    is_empty_dir = False
+
             items.append(
                 {
                     "name": e.name,
@@ -40,8 +60,11 @@ class LocalFS:
                     "is_dir": is_dir,
                     "size": size,
                     "modified": modified,
+                    "is_dead_symlink": is_dead_symlink,
+                    "is_empty_dir": is_empty_dir,
                 }
             )
+
         items.sort(key=lambda f: (not f["is_dir"], f["name"].lower()))
         return items
 
