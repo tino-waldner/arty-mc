@@ -10,7 +10,7 @@ class ArtifactoryAPI:
     def __init__(self, config):
         self.session = AuthSession(config["server"], config["user"], config["token"])
         self.base_url = config["server"].rstrip("/")
-        self.apikey = config["token"].rstrip("/")
+        self.apikey = config["token"]
 
     def list_folder(self, repo, path=""):
         repo_path = f"{repo}/{path.lstrip('/').rstrip('/')}"

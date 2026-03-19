@@ -53,11 +53,15 @@ class FileTable(DataTable):
             name = f["name"]
             if f.get("is_dir"):
                 name = "/ " + name
-            style = None
             if f.get("is_dead_symlink"):
                 style = "red"
+            elif f.get("is_unreadable"):
+                style = "grey50"
             elif f.get("is_empty_dir"):
                 style = "yellow"
+            else:
+                style = None
+
             name_cell = Text(name, style=style)
             size_cell = Text(str(f.get("size", "")), style=style)
             modified_cell = Text(str(f.get("modified", "")), style=style)

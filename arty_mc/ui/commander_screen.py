@@ -1,5 +1,4 @@
 import asyncio
-import sys
 from pathlib import Path
 
 from textual import on  # type: ignore
@@ -80,9 +79,9 @@ class CommanderScreen(Screen):
 
     def action_up(self):
         if self.active == "local":
-            self.local_fs.up()
-            self.local_path_line.path = self.local_fs.cwd
-            self.refresh_local()
+            if self.local_fs.up():
+                self.local_path_line.path = self.local_fs.cwd
+                self.refresh_local()
         else:
             self.remote_fs.up()
             self.remote_path_line.path = (
@@ -99,13 +98,23 @@ class CommanderScreen(Screen):
         self.refresh_remote()
 
     def action_quit(self):
-        sys.exit()
+        self.app.exit()
 
-    async def _copy_worker(self):
+    def _lock_ui(self):
         self.local_table.set_enabled(False)
         self.remote_table.set_enabled(False)
         self.local_filter.display = False
         self.remote_filter.display = False
+
+    def _unlock_ui(self):
+        self.local_table.set_enabled(True)
+        self.remote_table.set_enabled(True)
+        self.local_filter.display = True
+        self.remote_filter.display = True
+        self.set_focus(self.get_active())
+
+    async def _copy_worker(self):
+        self._lock_ui()
         self.transfer_panel = TransferPanel()
         self.mount(self.transfer_panel)
 
@@ -113,70 +122,72 @@ class CommanderScreen(Screen):
             if action == "start":
                 self.transfer_panel.start(value)
             elif action == "advance":
-                self.transfer_panel.advance(value)  #
+                self.transfer_panel.advance(value)
             elif action == "finish":
                 self.transfer_panel.finish()
 
-        item = self.get_active().selected()
-        if not item:
-            return
+        try:
+            item = self.get_active().selected()
+            if not item:
+                return
 
-        if self.active == "local":
-            local_path = Path(self.local_fs.path(item["name"]))
-            remote_path = f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
-            entry = TransferEntry(
-                local=local_path,
-                remote=f"{self.remote_fs.server}/{remote_path}",
-                is_dir=item["is_dir"],
-            )
-            self.worker = self.run_worker(
-                upload(
-                    [entry],
-                    auth=self.remote_fs.api.session.session.auth,
-                    progress_callback=progress_handler,
-                    cancel_event=self.cancel_event,
+            if self.active == "local":
+                local_path = Path(self.local_fs.path(item["name"]))
+                remote_path = (
+                    f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
                 )
-            )
-            await self.worker.wait()
-            self.refresh_remote()
-        else:
-            remote_full_path = (
-                f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
-            )
-            local_path = Path(self.local_fs.path(item["name"]))
-            entry = TransferEntry(
-                local=local_path,
-                remote=f"{self.remote_fs.server}/{remote_full_path}",
-                is_dir=item["is_dir"],
-            )
-            self.worker = self.run_worker(
-                download(
-                    [entry],
-                    auth=self.remote_fs.api.session.session.auth,
-                    progress_callback=progress_handler,
-                    cancel_event=self.cancel_event,
+                entry = TransferEntry(
+                    local=local_path,
+                    remote=f"{self.remote_fs.server}/{remote_path}",
+                    is_dir=item["is_dir"],
                 )
-            )
-            await self.worker.wait()
-            self.refresh_local()
-
-        await self.transfer_panel.remove()
-        self.local_table.set_enabled(True)
-        self.remote_table.set_enabled(True)
-        self.local_filter.display = True
-        self.remote_filter.display = True
-        self.set_focus(self.get_active())
+                self.worker = self.run_worker(
+                    upload(
+                        [entry],
+                        auth=self.remote_fs.api.session.session.auth,
+                        progress_callback=progress_handler,
+                        cancel_event=self.cancel_event,
+                    )
+                )
+                await self.worker.wait()
+                self.refresh_remote()
+            else:
+                remote_full_path = (
+                    f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
+                )
+                local_path = Path(self.local_fs.path(item["name"]))
+                entry = TransferEntry(
+                    local=local_path,
+                    remote=f"{self.remote_fs.server}/{remote_full_path}",
+                    is_dir=item["is_dir"],
+                )
+                self.worker = self.run_worker(
+                    download(
+                        [entry],
+                        base_url=self.remote_fs.server,
+                        auth=self.remote_fs.api.session.session.auth,
+                        progress_callback=progress_handler,
+                        cancel_event=self.cancel_event,
+                    )
+                )
+                await self.worker.wait()
+                self.refresh_local()
+        finally:
+            await self.transfer_panel.remove()
+            self._unlock_ui()
 
     def action_copy(self):
         item = self.get_active().selected()
         if not item:
             return
 
-        src = (
-            self.local_fs.path(item["name"])
-            if self.active == "local"
-            else f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
-        )
+        if self.active == "local":
+            src = self.local_fs.path(item["name"])
+            if not self.local_fs.is_accessible_from_ui(src):
+                return
+        else:
+            src = f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
+
         dst = (
             f"{self.remote_fs.repo}/{self.remote_fs.path_str}"
             if self.active == "local"
@@ -192,11 +203,7 @@ class CommanderScreen(Screen):
         )
 
     async def _delete_worker(self, entry: FileEntry):
-        self.local_table.set_enabled(False)
-        self.remote_table.set_enabled(False)
-        self.local_filter.display = False
-        self.remote_filter.display = False
-
+        self._lock_ui()
         self.delete_panel = DeletePanel()
         self.mount(self.delete_panel)
 
@@ -210,30 +217,26 @@ class CommanderScreen(Screen):
             elif action == "finish":
                 self.delete_panel.finish()
 
-        fs = self.local_fs if self.active == "local" else self.remote_fs
+        try:
+            fs = self.local_fs if self.active == "local" else self.remote_fs
+            target = entry.name if self.active == "local" else entry
 
-        target = entry.name if self.active == "local" else entry
-
-        self.worker = self.run_worker(
-            fs.delete(
-                target,
-                progress_callback=progress_handler,
-                cancel_event=self.cancel_event,
+            self.worker = self.run_worker(
+                fs.delete(
+                    target,
+                    progress_callback=progress_handler,
+                    cancel_event=self.cancel_event,
+                )
             )
-        )
-        await self.worker.wait()
+            await self.worker.wait()
 
-        if self.active == "local":
-            self.refresh_local()
-        else:
-            self.refresh_remote()
-
-        await self.delete_panel.remove()
-        self.local_table.set_enabled(True)
-        self.remote_table.set_enabled(True)
-        self.local_filter.display = True
-        self.remote_filter.display = True
-        self.set_focus(self.get_active())
+            if self.active == "local":
+                self.refresh_local()
+            else:
+                self.refresh_remote()
+        finally:
+            await self.delete_panel.remove()
+            self._unlock_ui()
 
     def action_delete(self):
         item = self.get_active().selected()
@@ -245,11 +248,12 @@ class CommanderScreen(Screen):
             is_dir=item["is_dir"],
         )
 
-        path_name = (
-            f"{self.local_fs.cwd}/{entry.name}"
-            if self.active == "local"
-            else f"{self.remote_fs.repo}/{self.remote_fs.path(entry.name)}"
-        )
+        if self.active == "local":
+            path_name = f"{self.local_fs.cwd}/{entry.name}"
+            if not self.local_fs.is_accessible_from_ui(path_name):
+                return
+        else:
+            path_name = f"{self.remote_fs.repo}/{self.remote_fs.path(entry.name)}"
 
         def after_confirm(result):
             if result:
@@ -277,9 +281,9 @@ class CommanderScreen(Screen):
         if not item or not item.get("is_dir"):
             return
         if table == self.local_table:
-            self.local_fs.cd(item["name"])
-            self.local_path_line.path = self.local_fs.cwd
-            self.refresh_local()
+            if self.local_fs.cd(item["name"]):
+                self.local_path_line.path = self.local_fs.cwd
+                self.refresh_local()
         else:
             self.remote_fs.cd(item["name"])
             self.remote_path_line.path = (

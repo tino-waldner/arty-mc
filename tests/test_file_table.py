@@ -111,7 +111,7 @@ async def test_disabled_input_stops_events(table):
 
 
 @pytest.fixture
-def special_items() -> List[Dict[str, Any]]:
+def special_items() -> list[dict]:
     return [
         {"name": "file.txt", "size": 100, "modified": "2026-03-16"},
         {"name": "folder", "is_dir": True, "modified": "2026-03-14"},
@@ -122,6 +122,11 @@ def special_items() -> List[Dict[str, Any]]:
             "modified": "2026-03-17",
         },
         {"name": "broken_symlink", "is_dead_symlink": True, "modified": "2026-03-17"},
+        {
+            "name": "secret.txt",
+            "is_unreadable": True,
+            "modified": "2026-03-18",
+        },
     ]
 
 
@@ -139,6 +144,7 @@ async def test_special_items_flags(table_with_specials):
 
     found_empty = False
     found_dead = False
+    found_unreadable = False
 
     for item in table.items:
         if item.get("is_empty_dir"):
@@ -147,9 +153,13 @@ async def test_special_items_flags(table_with_specials):
         if item.get("is_dead_symlink"):
             found_dead = True
             assert item["is_dead_symlink"] is True
+        if item.get("is_unreadable"):
+            found_unreadable = True
+            assert item["is_unreadable"] is True
 
     assert found_empty, "No empty folder detected in items"
     assert found_dead, "No dead symlink detected in items"
+    assert found_unreadable, "No unreadable file detected in items"
 
 
 @pytest.mark.asyncio
@@ -166,3 +176,17 @@ async def test_special_items_filtering(table_with_specials):
     table.apply_filter("file")
     assert len(table.filtered_items) == 1
     assert table.filtered_items[0]["name"] == "file.txt"
+
+
+@pytest.fixture
+def unreadable_items() -> list[dict]:
+    return [{"name": "secret.txt", "is_unreadable": True, "modified": "2026-03-18"}]
+
+
+@pytest_asyncio.fixture
+async def table_with_unreadable(unreadable_items):
+    from arty_mc.ui.file_table import _TestFileTableApp
+
+    app = _TestFileTableApp(unreadable_items)
+    async with app.run_test():
+        yield app.table

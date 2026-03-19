@@ -39,4 +39,10 @@ def load_config():
     if not is_valid_url(server):
         raise RuntimeError(f"Config error: server '{server}' is not a valid URL.")
 
+    if not cfg.get("user"):
+        raise RuntimeError("Config error: 'user' not defined")
+
+    if not cfg.get("token"):
+        raise RuntimeError("Config error: 'token' not defined")
+
     return cfg

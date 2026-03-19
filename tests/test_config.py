@@ -21,17 +21,11 @@ def test_is_valid_url_invalid():
 
 def test_load_config_success(tmp_path, monkeypatch):
     config_file = tmp_path / ".arty-mc.yml"
-
     config_file.write_text(
         yaml.safe_dump(
-            {
-                "server": "https://example.com",
-                "user": "test",
-                "token": "abc",
-            }
+            {"server": "https://example.com", "user": "test", "token": "abc"}
         )
     )
-
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     cfg = load_config()
     assert cfg["server"] == "https://example.com"
@@ -41,41 +35,41 @@ def test_load_config_success(tmp_path, monkeypatch):
 
 def test_load_config_missing_file(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
     with pytest.raises(RuntimeError, match="Config file missing"):
         load_config()
 
 
 def test_load_config_missing_server(tmp_path, monkeypatch):
-    config_file = tmp_path / ".arty-mc.yml"
-
-    config_file.write_text(
-        yaml.safe_dump(
-            {
-                "user": "test",
-                "token": "abc",
-            }
-        )
+    (tmp_path / ".arty-mc.yml").write_text(
+        yaml.safe_dump({"user": "test", "token": "abc"})
     )
-
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
     with pytest.raises(RuntimeError, match="server"):
         load_config()
 
 
 def test_load_config_invalid_url(tmp_path, monkeypatch):
-    config_file = tmp_path / ".arty-mc.yml"
-
-    config_file.write_text(
-        yaml.safe_dump(
-            {
-                "server": "not-a-url",
-            }
-        )
+    (tmp_path / ".arty-mc.yml").write_text(
+        yaml.safe_dump({"server": "not-a-url", "user": "u", "token": "t"})
     )
-
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
     with pytest.raises(RuntimeError, match="not a valid URL"):
+        load_config()
+
+
+def test_load_config_missing_user(tmp_path, monkeypatch):
+    (tmp_path / ".arty-mc.yml").write_text(
+        yaml.safe_dump({"server": "https://example.com", "token": "t"})
+    )
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with pytest.raises(RuntimeError, match="user"):
+        load_config()
+
+
+def test_load_config_missing_token(tmp_path, monkeypatch):
+    (tmp_path / ".arty-mc.yml").write_text(
+        yaml.safe_dump({"server": "https://example.com", "user": "u"})
+    )
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with pytest.raises(RuntimeError, match="token"):
         load_config()

@@ -1,5 +1,4 @@
 import pytest  # type: ignore
-from textual.widget import Widget  # type: ignore
 
 from arty_mc.ui.commander_screen import CommanderScreen  # type: ignore
 from arty_mc.ui.confirm_dialog import ConfirmDialog  # type: ignore
@@ -7,14 +6,10 @@ from arty_mc.ui.delete_panel import DeletePanel  # type: ignore
 from arty_mc.ui.transfer_panel import TransferPanel  # type: ignore
 
 
-class DummyWidget(Widget):
-    pass
-
-
 @pytest.fixture
 def fake_config():
     return {
-        "server": "fake-server",
+        "server": "https://fake.server",
         "user": "fake-user",
         "token": "fake-token",
         "default_repo": "repo",
@@ -32,12 +27,10 @@ def test_confirm_dialog_instantiation():
 
 
 def test_delete_panel_instantiation():
-    child = DummyWidget()
-    panel = DeletePanel(child)
+    panel = DeletePanel()
     assert panel is not None
 
 
 def test_transfer_panel_instantiation():
-    child = DummyWidget()
-    panel = TransferPanel(child)
+    panel = TransferPanel()
     assert panel is not None

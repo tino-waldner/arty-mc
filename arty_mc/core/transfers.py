@@ -1,21 +1,24 @@
 import asyncio
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from artifactory import ArtifactoryPath  # type: ignore
 from requests import Session  # type: ignore
 from requests.adapters import HTTPAdapter  # type: ignore
 from urllib3.util.retry import Retry
 
+from arty_mc.core.fs_utils import is_accessible
+
 CHUNK_SIZE = 4 * 1024 * 1024
 CONCURRENCY_LIMIT = 4
 
 
 class TransferEntry:
-    def __init__(self, local: Path, remote: str, is_dir: bool):
+    def __init__(self, local: Path, remote: str, is_dir: bool, size: int = 0):
         self.local = local
         self.remote = remote
         self.is_dir = is_dir
+        self.size = size
 
 
 class ProgressFile:
@@ -42,6 +45,12 @@ class ProgressFile:
 
     def __len__(self):
         return self.size
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.file.close()
 
     def close(self):
         self.file.close()
@@ -73,28 +82,21 @@ def create_session() -> Session:
     return session
 
 
-upload_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
-download_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
-
-
 def upload_file(entry, session, auth=None, progress_callback=None, cancel_event=None):
     cancel_event = cancel_event or asyncio.Event()
     if cancel_event.is_set():
-        return  # early exit if canceled
-    pf = ProgressFile(entry.local, progress_callback, cancel_event)
-    try:
+        return
+    with ProgressFile(entry.local, progress_callback, cancel_event) as pf:
         r = session.put(
             entry.remote, data=pf, auth=auth, headers={"Expect": "100-continue"}
         )
         r.raise_for_status()
-    finally:
-        pf.close()
 
 
 async def upload_file_limited(
-    entry, session, auth=None, progress_callback=None, cancel_event=None
+    entry, session, semaphore, auth=None, progress_callback=None, cancel_event=None
 ):
-    async with upload_semaphore:
+    async with semaphore:
         await asyncio.to_thread(
             upload_file, entry, session, auth, progress_callback, cancel_event
         )
@@ -107,8 +109,7 @@ async def expand_upload_entries(
 
     for entry in entries:
         if not entry.is_dir:
-            if entry.local.is_symlink() and not entry.local.exists():
-                print(f"Skipping dead symlink: {entry.local}")
+            if not is_accessible(entry.local):
                 continue
             expanded.append(entry)
             continue
@@ -116,8 +117,7 @@ async def expand_upload_entries(
         remote_root = ArtifactoryPath(entry.remote, auth=auth)
 
         for local_path in entry.local.rglob("*"):
-            if local_path.is_symlink() and not local_path.exists():
-                print(f"Skipping dead symlink: {local_path}")
+            if not is_accessible(local_path):
                 continue
 
             rel = local_path.relative_to(entry.local)
@@ -141,6 +141,7 @@ async def upload(
     entries: List[TransferEntry], auth=None, progress_callback=None, cancel_event=None
 ):
     cancel_event = cancel_event or asyncio.Event()
+    semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     session = create_session()
     entries = await expand_upload_entries(entries, auth)
 
@@ -151,7 +152,9 @@ async def upload(
         progress_callback("start", total_bytes)
 
     tasks = [
-        upload_file_limited(entry, session, auth, progress_callback, cancel_event)
+        upload_file_limited(
+            entry, session, semaphore, auth, progress_callback, cancel_event
+        )
         for entry in entries
     ]
 
@@ -172,10 +175,9 @@ def download_file(
     cancel_event=None,
 ):
     cancel_event = cancel_event or asyncio.Event()
-    remote_file = ArtifactoryPath(entry.remote, auth=auth)
     entry.local.parent.mkdir(parents=True, exist_ok=True)
 
-    with session.get(str(remote_file), stream=True, auth=auth) as r:
+    with session.get(entry.remote, stream=True, auth=auth) as r:
         r.raise_for_status()
 
         with open(entry.local, "wb") as f:
@@ -191,64 +193,180 @@ def download_file(
 
 
 async def download_file_limited(
-    entry, session, auth=None, progress_callback=None, cancel_event=None
+    entry, session, semaphore, auth=None, progress_callback=None, cancel_event=None
 ):
-    async with download_semaphore:
+    async with semaphore:
         await asyncio.to_thread(
             download_file, entry, session, auth, progress_callback, cancel_event
         )
 
 
-async def expand_entries(entries: List[TransferEntry], auth) -> List[TransferEntry]:
+def _aql_expand_entry(
+    entry: TransferEntry,
+    base_url: str,
+    session: Session,
+    auth,
+) -> Tuple[List[TransferEntry], int]:
+    artifactory_base = base_url.rstrip("/") + "/artifactory"
+    rel = entry.remote[len(artifactory_base) :].lstrip("/")
+    parts = rel.split("/", 1)
+    repo = parts[0]
+    folder_path = parts[1] if len(parts) > 1 else "."
+
+    # Build AQL: one request returns all files + sizes recursively
+    if folder_path == ".":
+        path_clause = '"path": {"$match": "*"}'
+    else:
+        path_clause = (
+            f'"$or": ['
+            f'{{"path": "{folder_path}"}}, '
+            f'{{"path": {{"$match": "{folder_path}/*"}}}}'
+            f"]"
+        )
+
+    aql = (
+        f"items.find({{"
+        f'"repo": "{repo}", '
+        f'"type": "file", '
+        f"{path_clause}"
+        f'}}).include("repo", "path", "name", "size")'
+    )
+
+    aql_url = f"{artifactory_base}/api/search/aql"
+
+    try:
+        r = session.post(
+            aql_url,
+            data=aql,
+            auth=auth,
+            headers={"Content-Type": "text/plain"},
+            timeout=30,
+        )
+        r.raise_for_status()
+        results = r.json().get("results", [])
+    except Exception:
+        return _rglob_expand_entry(entry, auth)
+
     expanded = []
+    total_bytes = 0
 
-    for entry in entries:
-        if not entry.is_dir:
-            expanded.append(entry)
-            continue
+    for item in results:
+        item_path = item["path"]
+        item_name = item["name"]
+        size = item.get("size", 0)
 
-        root = ArtifactoryPath(entry.remote, auth=auth)
-        entry.local.mkdir(parents=True, exist_ok=True)
+        remote_file_url = f"{artifactory_base}/{repo}/{item_path}/{item_name}"
 
-        for child in root.rglob("*"):
-            rel = child.relative_to(root)
+        if folder_path == ".":
+            rel_path = (
+                Path(item_path) / item_name if item_path != "." else Path(item_name)
+            )
+        else:
+            full_item_path = f"{item_path}/{item_name}"
+            try:
+                rel_path = Path(full_item_path).relative_to(folder_path)
+            except ValueError:
+                rel_path = Path(item_name)
 
-            local_path = entry.local / str(rel)
+        local_path = entry.local / rel_path
+        total_bytes += size
 
-            if child.is_dir():
-                local_path.mkdir(parents=True, exist_ok=True)
-            else:
-                expanded.append(
-                    TransferEntry(
-                        local=local_path,
-                        remote=str(child),
-                        is_dir=False,
-                    )
+        expanded.append(
+            TransferEntry(
+                local=local_path,
+                remote=remote_file_url,
+                is_dir=False,
+                size=size,
+            )
+        )
+
+    return expanded, total_bytes
+
+
+def _rglob_expand_entry(entry: TransferEntry, auth) -> Tuple[List[TransferEntry], int]:
+    """Fallback: walk the remote tree with rglob + stat per file."""
+    root = ArtifactoryPath(entry.remote, auth=auth)
+    entry.local.mkdir(parents=True, exist_ok=True)
+
+    expanded = []
+    total_bytes = 0
+
+    for child in root.rglob("*"):
+        rel = child.relative_to(root)
+        local_path = entry.local / str(rel)
+
+        if child.is_dir():
+            local_path.mkdir(parents=True, exist_ok=True)
+        else:
+            try:
+                size = child.stat().st_size
+            except Exception:
+                size = 0
+            total_bytes += size
+            expanded.append(
+                TransferEntry(
+                    local=local_path,
+                    remote=str(child),
+                    is_dir=False,
+                    size=size,
                 )
+            )
 
-    return expanded
+    return expanded, total_bytes
 
 
-async def download(
-    entries: List[TransferEntry], auth=None, progress_callback=None, cancel_event=None
-):
-    cancel_event = cancel_event or asyncio.Event()
-    session = create_session()
-    entries = await expand_entries(entries, auth)
+async def expand_entries(
+    entries: List[TransferEntry],
+    base_url: str,
+    session: Session,
+    auth,
+) -> Tuple[List[TransferEntry], int]:
+    expanded = []
     total_bytes = 0
 
     for entry in entries:
-        try:
-            remote_file = ArtifactoryPath(entry.remote, auth=auth)
-            total_bytes += remote_file.stat().st_size
-        except Exception:
-            pass
+        if not entry.is_dir:
+            try:
+                r = session.head(entry.remote, auth=auth, timeout=10)
+                size = int(r.headers.get("Content-Length", 0))
+            except Exception:
+                size = 0
+            total_bytes += size
+            expanded.append(
+                TransferEntry(
+                    local=entry.local, remote=entry.remote, is_dir=False, size=size
+                )
+            )
+        else:
+            sub_entries, sub_bytes = await asyncio.to_thread(
+                _aql_expand_entry, entry, base_url, session, auth
+            )
+            expanded.extend(sub_entries)
+            total_bytes += sub_bytes
+
+    return expanded, total_bytes
+
+
+async def download(
+    entries: List[TransferEntry],
+    base_url: str,
+    auth=None,
+    progress_callback=None,
+    cancel_event=None,
+):
+    cancel_event = cancel_event or asyncio.Event()
+    semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    session = create_session()
+
+    entries, total_bytes = await expand_entries(entries, base_url, session, auth)
 
     if progress_callback:
         progress_callback("start", total_bytes)
 
     tasks = [
-        download_file_limited(entry, session, auth, progress_callback, cancel_event)
+        download_file_limited(
+            entry, session, semaphore, auth, progress_callback, cancel_event
+        )
         for entry in entries
     ]
 

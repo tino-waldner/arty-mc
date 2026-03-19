@@ -1,4 +1,4 @@
-textual
-requests
-dohq-artifactory
-pyyaml
+textual>=0.52.0
+requests>=2.28.0
+dohq-artifactory>=0.9.2
+pyyaml>=6.0
