@@ -22,15 +22,13 @@ def test_is_valid_url_invalid():
 def test_load_config_success(tmp_path, monkeypatch):
     config_file = tmp_path / ".arty-mc.yml"
     config_file.write_text(
-        yaml.safe_dump(
-            {"server": "https://example.com", "user": "test", "token": "abc"}
-        )
+        yaml.safe_dump({"server": "https://example.com", "user": "test", "token": "abc"})
     )
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     cfg = load_config()
     assert cfg["server"] == "https://example.com"
     assert cfg["user"] == "test"
-    assert cfg["token"] == "abc"
+    assert cfg["token"] == "abc"  # noqa: S105
 
 
 def test_load_config_missing_file(tmp_path, monkeypatch):
@@ -40,9 +38,7 @@ def test_load_config_missing_file(tmp_path, monkeypatch):
 
 
 def test_load_config_missing_server(tmp_path, monkeypatch):
-    (tmp_path / ".arty-mc.yml").write_text(
-        yaml.safe_dump({"user": "test", "token": "abc"})
-    )
+    (tmp_path / ".arty-mc.yml").write_text(yaml.safe_dump({"user": "test", "token": "abc"}))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     with pytest.raises(RuntimeError, match="server"):
         load_config()

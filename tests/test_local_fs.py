@@ -204,9 +204,7 @@ def test_list_handles_stat_exception(monkeypatch):
 def test_list_handles_unreadable_via_stat(tmp_path, monkeypatch):
     f = tmp_path / "file.txt"
     f.write_text("abc")
-    monkeypatch.setattr(
-        os, "stat", lambda path: (_ for _ in ()).throw(PermissionError())
-    )
+    monkeypatch.setattr(os, "stat", lambda path: (_ for _ in ()).throw(PermissionError()))
     fs = LocalFS()
     fs.cwd = str(tmp_path)
     items = fs.list()
@@ -226,18 +224,14 @@ def test_list_symlink_to_file(tmp_path):
     assert entry["is_dead_symlink"] is False
     assert entry["is_dir"] is False
     assert entry["size"] == target.stat().st_size
-    expected_modified = datetime.fromtimestamp(target.stat().st_mtime).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    expected_modified = datetime.fromtimestamp(target.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
     assert entry["modified"] == expected_modified
 
 
 def test_list_listdir_exception_on_dir(tmp_path, monkeypatch):
     d = tmp_path / "dir"
     d.mkdir()
-    monkeypatch.setattr(
-        os, "listdir", lambda p: (_ for _ in ()).throw(PermissionError())
-    )
+    monkeypatch.setattr(os, "listdir", lambda p: (_ for _ in ()).throw(PermissionError()))
     fs = LocalFS()
     fs.cwd = str(tmp_path)
     items = fs.list()
@@ -256,7 +250,6 @@ def test_cd_success(tmp_path):
 def test_cd_inaccessible(tmp_path):
     fs = LocalFS()
     with patch.object(fs, "is_accessible_from_ui", return_value=False):
-        # cd uses is_accessible (fs_utils), not is_accessible_from_ui
         pass
     with patch("arty_mc.core.local_fs.is_accessible", return_value=False):
         result = fs.cd(str(tmp_path))
@@ -372,19 +365,15 @@ async def test_delete_exception(monkeypatch, tmp_path):
     )
     fs = LocalFS()
     fs.cwd = str(tmp_path)
-    # RuntimeError now propagates so the UI can show it
     with pytest.raises(RuntimeError, match="cannot delete"):
         await fs.delete("file.txt")
 
 
 @pytest.mark.asyncio
 async def test_delete_item_progress_fires_on_error(monkeypatch, tmp_path):
-    """progress_callback advance fires even when _delete_item raises."""
     f = tmp_path / "file.txt"
     f.write_text("data")
-    monkeypatch.setattr(
-        os, "remove", lambda *a, **k: (_ for _ in ()).throw(OSError("disk error"))
-    )
+    monkeypatch.setattr(os, "remove", lambda *a, **k: (_ for _ in ()).throw(OSError("disk error")))
     fs = LocalFS()
     fs.cwd = str(tmp_path)
     events = []

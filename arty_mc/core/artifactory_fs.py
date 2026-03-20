@@ -103,9 +103,7 @@ class ArtifactoryFS:
                     is_file = current.is_file()
                     is_dir = current.is_dir()
                 except Exception as e:
-                    raise RuntimeError(
-                        f"Connection lost during delete: {e}"
-                    ) from e
+                    raise RuntimeError(f"Connection lost during delete: {e}") from e
 
                 if is_file:
                     if progress_callback:
@@ -115,9 +113,7 @@ class ArtifactoryFS:
                     try:
                         children = list(current.iterdir())
                     except Exception as e:
-                        raise RuntimeError(
-                            f"Connection lost while listing directory: {e}"
-                        ) from e
+                        raise RuntimeError(f"Connection lost while listing directory: {e}") from e
 
                     for child in children:
                         delete_queue.append(child)
@@ -136,7 +132,7 @@ class ArtifactoryFS:
             elif item.is_dir():
                 try:
                     item.rmdir()
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
         except Exception as e:
             raise RuntimeError(f"Failed to delete {item}: {e}") from e

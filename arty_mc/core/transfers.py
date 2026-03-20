@@ -1,5 +1,4 @@
 import asyncio
-import json
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
@@ -13,8 +12,6 @@ from arty_mc.core.fs_utils import is_accessible
 CHUNK_SIZE = 4 * 1024 * 1024
 CONCURRENCY_LIMIT = 4
 
-# Cached result of the first AQL probe.
-# None = not yet tried, True = works, False = unavailable on this server.
 _aql_available: Optional[bool] = None
 
 
@@ -27,9 +24,7 @@ class TransferEntry:
 
 
 class ProgressFile:
-    def __init__(
-        self, path: Path, callback=None, cancel_event: Optional[asyncio.Event] = None
-    ):
+    def __init__(self, path: Path, callback=None, cancel_event: Optional[asyncio.Event] = None):
         self.file = open(path, "rb")
         self.callback = callback
         self.size = path.stat().st_size
@@ -81,7 +76,7 @@ def create_session() -> Session:
     )
 
     session = Session()
-    session.mount("http://", adapter)
+    session.mount("http://", adapter)  # noqa: S507
     session.mount("https://", adapter)
 
     return session
@@ -92,9 +87,7 @@ def upload_file(entry, session, auth=None, progress_callback=None, cancel_event=
     if cancel_event.is_set():
         return
     with ProgressFile(entry.local, progress_callback, cancel_event) as pf:
-        r = session.put(
-            entry.remote, data=pf, auth=auth, headers={"Expect": "100-continue"}
-        )
+        r = session.put(entry.remote, data=pf, auth=auth, headers={"Expect": "100-continue"})
         r.raise_for_status()
 
 
@@ -102,14 +95,10 @@ async def upload_file_limited(
     entry, session, semaphore, auth=None, progress_callback=None, cancel_event=None
 ):
     async with semaphore:
-        await asyncio.to_thread(
-            upload_file, entry, session, auth, progress_callback, cancel_event
-        )
+        await asyncio.to_thread(upload_file, entry, session, auth, progress_callback, cancel_event)
 
 
-async def expand_upload_entries(
-    entries: List[TransferEntry], auth=None
-) -> List[TransferEntry]:
+async def expand_upload_entries(entries: List[TransferEntry], auth=None) -> List[TransferEntry]:
     expanded = []
 
     for entry in entries:
@@ -153,9 +142,7 @@ async def upload(
     session = create_session()
     entries = await expand_upload_entries(entries, auth)
 
-    total_bytes = sum(
-        entry.local.stat().st_size for entry in entries if not entry.is_dir
-    )
+    total_bytes = sum(entry.local.stat().st_size for entry in entries if not entry.is_dir)
     if progress_callback:
         progress_callback("start", total_bytes)
 
@@ -214,22 +201,13 @@ def _aql_expand_entry(
     auth,
     warn_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[TransferEntry], int]:
-    """Use a single AQL query to list all files under a remote path,
-    returning (expanded_entries, total_bytes).
-
-    Falls back to rglob-based expansion if AQL is unavailable. The result
-    of the first probe is cached so the warning fires at most once per
-    process — not on every download.
-    """
     global _aql_available
 
-    # If we already know AQL is unavailable on this server, skip straight
-    # to the fallback without attempting the request or warning again.
     if _aql_available is False:
         return _rglob_expand_entry(entry, auth)
 
     artifactory_base = base_url.rstrip("/") + "/artifactory"
-    rel = entry.remote[len(artifactory_base):].lstrip("/")
+    rel = entry.remote[len(artifactory_base) :].lstrip("/")
     parts = rel.split("/", 1)
     repo = parts[0]
     folder_path = parts[1] if len(parts) > 1 else "."
@@ -238,17 +216,14 @@ def _aql_expand_entry(
         path_clause = '"path": {"$match": "*"}'
     else:
         path_clause = (
-            f'"$or": ['
-            f'{{"path": "{folder_path}"}}, '
-            f'{{"path": {{"$match": "{folder_path}/*"}}}}'
-            f']' 
+            f'"$or": [{{"path": "{folder_path}"}}, {{"path": {{"$match": "{folder_path}/*"}}}}]'
         )
 
     aql = (
-        f'items.find({{' 
+        f"items.find({{"
         f'"repo": "{repo}", '
         f'"type": "file", '
-        f'{path_clause}'
+        f"{path_clause}"
         f'}}).include("repo", "path", "name", "size")'
     )
 
@@ -309,10 +284,7 @@ def _aql_expand_entry(
     return expanded, total_bytes
 
 
-def _rglob_expand_entry(
-    entry: TransferEntry, auth
-) -> Tuple[List[TransferEntry], int]:
-    """Fallback: walk the remote tree with rglob + stat per file."""
+def _rglob_expand_entry(entry: TransferEntry, auth) -> Tuple[List[TransferEntry], int]:
     root = ArtifactoryPath(entry.remote, auth=auth)
     entry.local.mkdir(parents=True, exist_ok=True)
 
@@ -350,11 +322,6 @@ async def expand_entries(
     auth,
     warn_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[TransferEntry], int]:
-    """Expand all entries into individual files, returning (entries, total_bytes).
-
-    For single files: no expansion needed, size comes from a HEAD request.
-    For directories: uses AQL (single request) with rglob fallback.
-    """
     expanded = []
     total_bytes = 0
 
@@ -393,15 +360,10 @@ async def download(
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     session = create_session()
 
-    # If the caller already knows AQL is unavailable (e.g. Artifactory OSS),
-    # pre-set the sentinel so _aql_expand_entry skips straight to rglob
-    # without attempting the request or warning.
     if not use_aql:
         _aql_available = False
 
-    entries, total_bytes = await expand_entries(
-        entries, base_url, session, auth, warn_callback
-    )
+    entries, total_bytes = await expand_entries(entries, base_url, session, auth, warn_callback)
 
     if progress_callback:
         progress_callback("start", total_bytes)

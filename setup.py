@@ -2,11 +2,11 @@ from setuptools import find_packages, setup  # type: ignore
 
 setup(
     name="arty-mc",
-    version="0.2.0",
+    version="0.2.1",
     packages=find_packages(),
     install_requires=[
         "textual>=0.52.0",
-        "requests>=2.28.0",
+        "requests>=2.32.4",
         "dohq-artifactory>=0.9.2",
         "pyyaml>=6.0",
     ],

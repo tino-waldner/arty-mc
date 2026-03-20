@@ -14,10 +14,6 @@ class ArtifactoryAPI:
         self._license: str | None = None
 
     def get_license(self) -> str:
-        """Return the Artifactory license type e.g. 'OSS', 'Pro', 'Enterprise'.
-
-        Cached after the first call. Returns 'unknown' on any error.
-        """
         if self._license is not None:
             return self._license
         try:
@@ -28,7 +24,6 @@ class ArtifactoryAPI:
         return self._license
 
     def has_aql(self) -> bool:
-        """Return True if this Artifactory instance supports AQL search."""
         return self.get_license().upper() not in ("OSS", "UNKNOWN")
 
     def list_folder(self, repo, path=""):

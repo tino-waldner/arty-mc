@@ -56,9 +56,7 @@ class CommanderScreen(Screen):
 
             with Vertical():
                 self.remote_filter = FilterBar(id="remote-filter")
-                self.remote_path_line = PathLine(
-                    f"{self.remote_fs.repo}/{self.remote_fs.path_str}"
-                )
+                self.remote_path_line = PathLine(f"{self.remote_fs.repo}/{self.remote_fs.path_str}")
                 self.remote_table = FileTable()
                 yield self.remote_filter
                 yield self.remote_path_line
@@ -77,17 +75,13 @@ class CommanderScreen(Screen):
         try:
             self.local_table.load(self.local_fs.list())
         except Exception as e:
-            self._show_error(
-                f"Cannot read local directory:\n{e}", title="Local Filesystem Error"
-            )
+            self._show_error(f"Cannot read local directory:\n{e}", title="Local Filesystem Error")
 
     def refresh_remote(self):
         try:
             self.remote_table.load(self.remote_fs.list())
         except Exception as e:
-            self._show_error(
-                f"Cannot reach Artifactory:\n{e}", title="Connection Error"
-            )
+            self._show_error(f"Cannot reach Artifactory:\n{e}", title="Connection Error")
 
     def action_up(self):
         if self.active == "local":
@@ -96,9 +90,7 @@ class CommanderScreen(Screen):
                 self.refresh_local()
         else:
             self.remote_fs.up()
-            self.remote_path_line.path = (
-                f"{self.remote_fs.repo}/{self.remote_fs.path_str}"
-            )
+            self.remote_path_line.path = f"{self.remote_fs.repo}/{self.remote_fs.path_str}"
             self.refresh_remote()
 
     def action_switch(self):
@@ -151,9 +143,7 @@ class CommanderScreen(Screen):
 
             if self.active == "local":
                 local_path = Path(self.local_fs.path(item["name"]))
-                remote_path = (
-                    f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
-                )
+                remote_path = f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
                 entry = TransferEntry(
                     local=local_path,
                     remote=f"{self.remote_fs.server}/{remote_path}",
@@ -171,9 +161,7 @@ class CommanderScreen(Screen):
                 await self.worker.wait()
                 self.refresh_remote()
             else:
-                remote_full_path = (
-                    f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
-                )
+                remote_full_path = f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
                 local_path = Path(self.local_fs.path(item["name"]))
                 entry = TransferEntry(
                     local=local_path,
@@ -236,9 +224,7 @@ class CommanderScreen(Screen):
             if result:
                 asyncio.create_task(self._copy_worker())
 
-        self.app.push_screen(
-            ConfirmDialog(f"Transfer '{src}' → '{dst}'?"), callback=after_confirm
-        )
+        self.app.push_screen(ConfirmDialog(f"Transfer '{src}' → '{dst}'?"), callback=after_confirm)
 
     async def _delete_worker(self, entry: FileEntry):
         self._lock_ui()
@@ -307,9 +293,7 @@ class CommanderScreen(Screen):
             if result:
                 asyncio.create_task(self._delete_worker(entry))
 
-        self.app.push_screen(
-            ConfirmDialog(f"Delete '{path_name}'?"), callback=after_confirm
-        )
+        self.app.push_screen(ConfirmDialog(f"Delete '{path_name}'?"), callback=after_confirm)
 
     async def action_cancel(self):
         if self.worker:
@@ -334,9 +318,7 @@ class CommanderScreen(Screen):
                 self.refresh_local()
         else:
             self.remote_fs.cd(item["name"])
-            self.remote_path_line.path = (
-                f"{self.remote_fs.repo}/{self.remote_fs.path_str}"
-            )
+            self.remote_path_line.path = f"{self.remote_fs.repo}/{self.remote_fs.path_str}"
             self.refresh_remote()
 
     @on(FilterBar.Changed)

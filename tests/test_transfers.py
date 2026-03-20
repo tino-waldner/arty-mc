@@ -7,10 +7,6 @@ from requests import Session as ReqSession  # type: ignore
 
 from arty_mc.core import transfers  # type: ignore
 
-# ---------------------------------------------------------------------------
-# ProgressFile
-# ---------------------------------------------------------------------------
-
 
 def test_progress_file_reads(tmp_path):
     file_path = tmp_path / "test.txt"
@@ -67,9 +63,7 @@ def test_create_session_retry():
 def test_upload_file_called(tmp_path):
     file_path = tmp_path / "file.txt"
     file_path.write_text("abc")
-    entry = transfers.TransferEntry(
-        local=file_path, remote="remote/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=file_path, remote="remote/file.txt", is_dir=False)
     dummy_response = MagicMock()
     dummy_response.raise_for_status = MagicMock()
     dummy_session = MagicMock()
@@ -82,9 +76,7 @@ def test_upload_file_called(tmp_path):
 def test_upload_file_raises(tmp_path):
     file_path = tmp_path / "file.txt"
     file_path.write_text("abc")
-    entry = transfers.TransferEntry(
-        local=file_path, remote="remote/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=file_path, remote="remote/file.txt", is_dir=False)
     dummy_response = MagicMock()
     dummy_response.raise_for_status.side_effect = Exception("fail")
     dummy_session = MagicMock()
@@ -96,9 +88,7 @@ def test_upload_file_raises(tmp_path):
 def test_upload_file_early_cancel_direct(tmp_path):
     file_path = tmp_path / "file.txt"
     file_path.write_text("abc")
-    entry = transfers.TransferEntry(
-        local=file_path, remote="remote/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=file_path, remote="remote/file.txt", is_dir=False)
     cancel_event = asyncio.Event()
     cancel_event.set()
     dummy_session = MagicMock()
@@ -110,9 +100,7 @@ def test_upload_file_early_cancel_direct(tmp_path):
 async def test_expand_upload_entries_with_file(tmp_path):
     file_path = tmp_path / "file.txt"
     file_path.write_text("hello")
-    entry = transfers.TransferEntry(
-        local=file_path, remote="remote/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=file_path, remote="remote/file.txt", is_dir=False)
     expanded = await transfers.expand_upload_entries([entry])
     assert len(expanded) == 1
     assert expanded[0].local == file_path
@@ -205,9 +193,7 @@ async def test_expand_upload_entries_ignores_dead_symlinks(tmp_path, monkeypatch
 async def test_expand_upload_entries_skips_dead_symlink_file(tmp_path):
     dead_file = tmp_path / "broken.txt"
     dead_file.symlink_to("/non/existent/target")
-    entry = transfers.TransferEntry(
-        local=dead_file, remote="remote/broken.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=dead_file, remote="remote/broken.txt", is_dir=False)
     expanded = await transfers.expand_upload_entries([entry])
     assert expanded == []
 
@@ -239,9 +225,7 @@ async def test_upload_end_to_end(tmp_path, monkeypatch):
     fake_response.raise_for_status = lambda: None
     fake_session.put.return_value = fake_response
     monkeypatch.setattr(transfers, "create_session", lambda: fake_session)
-    await transfers.upload(
-        [entry], progress_callback=lambda e, v: events.append((e, v))
-    )
+    await transfers.upload([entry], progress_callback=lambda e, v: events.append((e, v)))
     assert events[0][0] == "start"
     assert events[-1][0] == "finish"
 
@@ -275,9 +259,7 @@ async def test_upload_skips_dead_symlink(tmp_path, monkeypatch):
     monkeypatch.setattr(transfers, "create_session", lambda: fake_session)
     entry = transfers.TransferEntry(local=folder, remote="remote/folder", is_dir=True)
     events = []
-    await transfers.upload(
-        [entry], progress_callback=lambda ev, val: events.append((ev, val))
-    )
+    await transfers.upload([entry], progress_callback=lambda ev, val: events.append((ev, val)))
     fake_session.put.assert_called_once()
     assert events[0][0] == "start"
     assert events[-1][0] == "finish"
@@ -287,9 +269,7 @@ async def test_upload_skips_dead_symlink(tmp_path, monkeypatch):
 async def test_upload_file_limited_cancel(monkeypatch, tmp_path):
     file_path = tmp_path / "file.txt"
     file_path.write_text("abc")
-    entry = transfers.TransferEntry(
-        local=file_path, remote="remote/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=file_path, remote="remote/file.txt", is_dir=False)
     monkeypatch.setattr(
         transfers,
         "create_session",
@@ -335,8 +315,6 @@ async def test_upload_cancelled_error_handled(monkeypatch, tmp_path):
 
 
 def _make_dummy_get_session(chunks=(b"abc",)):
-    """Return a session whose .get() streams the given chunks."""
-
     class Resp:
         def __enter__(self):
             return self
@@ -359,18 +337,14 @@ def _make_dummy_get_session(chunks=(b"abc",)):
 
 def test_download_file_creates_parent(tmp_path):
     local_file = tmp_path / "nested" / "file.txt"
-    entry = transfers.TransferEntry(
-        local=local_file, remote="http://fake/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=local_file, remote="http://fake/file.txt", is_dir=False)
     transfers.download_file(entry, _make_dummy_get_session())
     assert local_file.exists()
 
 
 def test_download_file_mid_read_cancel(tmp_path):
     local_file = tmp_path / "file.txt"
-    entry = transfers.TransferEntry(
-        local=local_file, remote="http://fake/file.txt", is_dir=False
-    )
+    entry = transfers.TransferEntry(local=local_file, remote="http://fake/file.txt", is_dir=False)
 
     cancel_event = asyncio.Event()
     call_count = 0
@@ -412,9 +386,7 @@ def test_aql_expand_entry_single_file(tmp_path, monkeypatch):
         remote="https://srv/artifactory/my-repo/a/b/folder",
         is_dir=True,
     )
-    expanded, total = transfers._aql_expand_entry(
-        entry, "https://srv", session, auth=None
-    )
+    expanded, total = transfers._aql_expand_entry(entry, "https://srv", session, auth=None)
     assert len(expanded) == 1
     assert expanded[0].size == 1234
     assert total == 1234
@@ -430,9 +402,7 @@ def test_aql_expand_entry_root_path(tmp_path, monkeypatch):
         remote="https://srv/artifactory/repo",
         is_dir=True,
     )
-    expanded, total = transfers._aql_expand_entry(
-        entry, "https://srv", session, auth=None
-    )
+    expanded, total = transfers._aql_expand_entry(entry, "https://srv", session, auth=None)
     assert len(expanded) == 1
     assert total == 42
 
@@ -444,18 +414,14 @@ def test_aql_expand_entry_fallback_on_error(tmp_path, monkeypatch):
     dummy_entry = transfers.TransferEntry(
         local=tmp_path / "f.txt", remote="r", is_dir=False, size=99
     )
-    monkeypatch.setattr(
-        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 99)
-    )
+    monkeypatch.setattr(transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 99))
 
     entry = transfers.TransferEntry(
         local=tmp_path,
         remote="https://srv/artifactory/repo/path",
         is_dir=True,
     )
-    expanded, total = transfers._aql_expand_entry(
-        entry, "https://srv", session, auth=None
-    )
+    expanded, total = transfers._aql_expand_entry(entry, "https://srv", session, auth=None)
     assert len(expanded) == 1
     assert total == 99
 
@@ -485,9 +451,7 @@ def test_rglob_expand_entry(tmp_path, monkeypatch):
         def __truediv__(self, other):
             return self
 
-    monkeypatch.setattr(
-        transfers, "ArtifactoryPath", lambda path, auth=None: FakeRoot()
-    )
+    monkeypatch.setattr(transfers, "ArtifactoryPath", lambda path, auth=None: FakeRoot())
     entry = transfers.TransferEntry(
         local=tmp_path / "local", remote="https://fake/repo", is_dir=True
     )
@@ -511,9 +475,7 @@ def test_rglob_expand_entry_dir_children(tmp_path, monkeypatch):
         def rglob(self, pattern):
             return [FakeDir()]
 
-    monkeypatch.setattr(
-        transfers, "ArtifactoryPath", lambda path, auth=None: FakeRoot()
-    )
+    monkeypatch.setattr(transfers, "ArtifactoryPath", lambda path, auth=None: FakeRoot())
     entry = transfers.TransferEntry(
         local=tmp_path / "local", remote="https://fake/repo", is_dir=True
     )
@@ -540,9 +502,7 @@ def test_rglob_expand_entry_stat_exception(tmp_path, monkeypatch):
         def rglob(self, pattern):
             return [FakeChild()]
 
-    monkeypatch.setattr(
-        transfers, "ArtifactoryPath", lambda path, auth=None: FakeRoot()
-    )
+    monkeypatch.setattr(transfers, "ArtifactoryPath", lambda path, auth=None: FakeRoot())
     entry = transfers.TransferEntry(
         local=tmp_path / "local", remote="https://fake/repo", is_dir=True
     )
@@ -564,9 +524,7 @@ async def test_expand_entries_single_file_head(tmp_path):
         remote="https://srv/artifactory/repo/file.txt",
         is_dir=False,
     )
-    expanded, total = await transfers.expand_entries(
-        [entry], "https://srv", session, auth=None
-    )
+    expanded, total = await transfers.expand_entries([entry], "https://srv", session, auth=None)
     assert len(expanded) == 1
     assert total == 512
     session.post.assert_not_called()
@@ -582,9 +540,7 @@ async def test_expand_entries_single_file_head_fails(tmp_path):
         remote="https://srv/artifactory/repo/file.txt",
         is_dir=False,
     )
-    expanded, total = await transfers.expand_entries(
-        [entry], "https://srv", session, auth=None
-    )
+    expanded, total = await transfers.expand_entries([entry], "https://srv", session, auth=None)
     assert len(expanded) == 1
     assert total == 0
 
@@ -594,9 +550,7 @@ async def test_expand_entries_directory_uses_aql(tmp_path, monkeypatch):
     dummy_entry = transfers.TransferEntry(
         local=tmp_path / "f.txt", remote="r", is_dir=False, size=77
     )
-    monkeypatch.setattr(
-        transfers, "_aql_expand_entry", lambda *a, **k: ([dummy_entry], 77)
-    )
+    monkeypatch.setattr(transfers, "_aql_expand_entry", lambda *a, **k: ([dummy_entry], 77))
 
     session = MagicMock()
     entry = transfers.TransferEntry(
@@ -604,9 +558,7 @@ async def test_expand_entries_directory_uses_aql(tmp_path, monkeypatch):
         remote="https://srv/artifactory/repo/dir",
         is_dir=True,
     )
-    expanded, total = await transfers.expand_entries(
-        [entry], "https://srv", session, auth=None
-    )
+    expanded, total = await transfers.expand_entries([entry], "https://srv", session, auth=None)
     assert len(expanded) == 1
     assert total == 77
 
@@ -620,9 +572,7 @@ async def test_expand_entries_empty_dir(tmp_path, monkeypatch):
         remote="https://srv/artifactory/repo/empty",
         is_dir=True,
     )
-    expanded, total = await transfers.expand_entries(
-        [entry], "https://srv", session, auth=None
-    )
+    expanded, total = await transfers.expand_entries([entry], "https://srv", session, auth=None)
     assert expanded == []
     assert total == 0
 
@@ -726,9 +676,7 @@ def test_aql_fallback_calls_warn_callback(tmp_path, monkeypatch):
     dummy_entry = transfers.TransferEntry(
         local=tmp_path / "f.txt", remote="r", is_dir=False, size=0
     )
-    monkeypatch.setattr(
-        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0)
-    )
+    monkeypatch.setattr(transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0))
 
     entry = transfers.TransferEntry(
         local=tmp_path,
@@ -757,25 +705,21 @@ def test_aql_warn_fires_only_once(tmp_path, monkeypatch):
     dummy_entry = transfers.TransferEntry(
         local=tmp_path / "f.txt", remote="r", is_dir=False, size=0
     )
-    monkeypatch.setattr(
-        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0)
-    )
+    monkeypatch.setattr(transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0))
 
     entry = transfers.TransferEntry(
         local=tmp_path,
         remote="https://srv/artifactory/repo/path",
         is_dir=True,
     )
-    cb = lambda msg: warnings.append(msg)
 
-    transfers._aql_expand_entry(
-        entry, "https://srv", session, auth=None, warn_callback=cb
-    )
+    def cb(msg):
+        warnings.append(msg)
+
+    transfers._aql_expand_entry(entry, "https://srv", session, auth=None, warn_callback=cb)
     assert len(warnings) == 1
 
-    transfers._aql_expand_entry(
-        entry, "https://srv", session, auth=None, warn_callback=cb
-    )
+    transfers._aql_expand_entry(entry, "https://srv", session, auth=None, warn_callback=cb)
     assert len(warnings) == 1
     assert session.post.call_count == 1
 
@@ -787,9 +731,7 @@ def test_aql_no_warn_when_already_known_unavailable(tmp_path, monkeypatch):
     dummy_entry = transfers.TransferEntry(
         local=tmp_path / "f.txt", remote="r", is_dir=False, size=0
     )
-    monkeypatch.setattr(
-        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0)
-    )
+    monkeypatch.setattr(transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0))
 
     entry = transfers.TransferEntry(
         local=tmp_path,

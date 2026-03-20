@@ -30,10 +30,10 @@ async def test_initial_path(path_line_widget):
 
 @pytest.mark.asyncio
 async def test_update_path(path_line_widget):
-    path_line_widget.path = "/tmp"
-    assert path_line_widget.path == "/tmp"
+    path_line_widget.path = "/some/path"
+    assert path_line_widget.path == "/some/path"
     rendered = path_line_widget.render()
-    assert rendered == "[bold cyan]─ /tmp ─[/bold cyan]"
+    assert rendered == "[bold cyan]─ /some/path ─[/bold cyan]"
 
 
 @pytest.mark.asyncio

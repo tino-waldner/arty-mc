@@ -18,12 +18,8 @@ def patch_transfers():
         return None
 
     with (
-        patch(
-            "arty_mc.core.transfers.upload", side_effect=lambda *a, **k: dummy_coro()
-        ),
-        patch(
-            "arty_mc.core.transfers.download", side_effect=lambda *a, **k: dummy_coro()
-        ),
+        patch("arty_mc.core.transfers.upload", side_effect=lambda *a, **k: dummy_coro()),
+        patch("arty_mc.core.transfers.download", side_effect=lambda *a, **k: dummy_coro()),
     ):
         yield
 
@@ -95,7 +91,7 @@ def fake_screen():
         async def runner():
             try:
                 await coro
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         asyncio.create_task(runner())
@@ -108,7 +104,6 @@ def fake_screen():
         return_value=Mock(selected=Mock(return_value=fake_item), ancestors_with_self=[])
     )
     screen.cancel_event = Mock()
-    # Capture _show_error calls for test assertions
     screen._show_error = Mock()
     return screen
 
@@ -136,7 +131,6 @@ async def test_copy_worker_no_selection(fake_screen):
 
 @pytest.mark.asyncio
 async def test_copy_worker_ui_always_unlocked_on_early_return(fake_screen):
-    """UI must be re-enabled even when no item is selected (try/finally)."""
     fake_screen.get_active.return_value.selected = Mock(return_value=None)
     await fake_screen._copy_worker()
     fake_screen.local_table.set_enabled.assert_any_call(True)
@@ -165,9 +159,7 @@ async def test_copy_worker_progress_coverage(fake_screen):
     panel_instance.finish = Mock()
     panel_instance.remove = AsyncMock()
 
-    async def fake_upload(
-        entries, auth=None, progress_callback=None, cancel_event=None
-    ):
+    async def fake_upload(entries, auth=None, progress_callback=None, cancel_event=None):
         if progress_callback:
             progress_callback("start", 789012)
             progress_callback("advance", 456)
@@ -179,9 +171,7 @@ async def test_copy_worker_progress_coverage(fake_screen):
         patch("arty_mc.ui.commander_screen.Path") as mock_path_class,
     ):
         mock_path_class.return_value = Mock(stat=lambda: Mock(st_size=789012))
-        fake_screen.run_worker = lambda coro, **kw: type(
-            "W", (), {"wait": lambda self: coro}
-        )()
+        fake_screen.run_worker = lambda coro, **kw: type("W", (), {"wait": lambda self: coro})()
         await fake_screen._copy_worker()
 
     panel_instance.start.assert_called_once()
@@ -227,9 +217,7 @@ async def test_delete_worker_progress_coverage(fake_screen):
     fake_screen.local_fs.delete = fake_delete
 
     with patch("arty_mc.ui.commander_screen.DeletePanel", return_value=panel_instance):
-        fake_screen.run_worker = lambda coro, **kw: type(
-            "W", (), {"wait": lambda self: coro}
-        )()
+        fake_screen.run_worker = lambda coro, **kw: type("W", (), {"wait": lambda self: coro})()
         await fake_screen._delete_worker(entry)
 
     panel_instance.start.assert_called_once_with(1)
@@ -248,7 +236,6 @@ def test_action_up_local_success(fake_screen):
 
 
 def test_action_up_local_blocked(fake_screen):
-    """When up() returns False (inaccessible parent), no refresh should happen."""
     fake_screen.active = "local"
     fake_screen.local_fs.up = Mock(return_value=False)
     fake_screen.refresh_local = Mock()
@@ -282,7 +269,6 @@ def test_action_refresh(fake_screen):
 
 
 def test_action_quit_uses_app_exit(fake_screen):
-    """action_quit must call self.app.exit(), NOT sys.exit()."""
     mock_app = Mock()
     type(fake_screen).app = PropertyMock(return_value=mock_app)
     fake_screen.action_quit()
@@ -388,9 +374,7 @@ async def test_action_cancel_cancelled_error(fake_screen):
 def test_row_selected_local_dir(fake_screen):
     fake_screen.active = "local"
     fake_screen.get_active = Mock(return_value=fake_screen.local_table)
-    fake_screen.local_table.selected = Mock(
-        return_value={"name": "dir", "is_dir": True}
-    )
+    fake_screen.local_table.selected = Mock(return_value={"name": "dir", "is_dir": True})
     fake_screen.local_fs.cd = Mock(return_value=True)
     fake_screen.refresh_local = Mock()
     fake_screen.on_data_table_row_selected(Mock())
@@ -399,12 +383,9 @@ def test_row_selected_local_dir(fake_screen):
 
 
 def test_row_selected_local_dir_cd_blocked(fake_screen):
-    """If cd() returns False, no refresh should happen."""
     fake_screen.active = "local"
     fake_screen.get_active = Mock(return_value=fake_screen.local_table)
-    fake_screen.local_table.selected = Mock(
-        return_value={"name": "locked", "is_dir": True}
-    )
+    fake_screen.local_table.selected = Mock(return_value={"name": "locked", "is_dir": True})
     fake_screen.local_fs.cd = Mock(return_value=False)
     fake_screen.refresh_local = Mock()
     fake_screen.on_data_table_row_selected(Mock())
@@ -414,9 +395,7 @@ def test_row_selected_local_dir_cd_blocked(fake_screen):
 def test_row_selected_remote_dir(fake_screen):
     fake_screen.active = "remote"
     fake_screen.get_active = Mock(return_value=fake_screen.remote_table)
-    fake_screen.remote_table.selected = Mock(
-        return_value={"name": "dir", "is_dir": True}
-    )
+    fake_screen.remote_table.selected = Mock(return_value={"name": "dir", "is_dir": True})
     fake_screen.remote_fs.cd = Mock()
     fake_screen.refresh_remote = Mock()
     fake_screen.on_data_table_row_selected(Mock())
@@ -432,9 +411,7 @@ def test_row_selected_no_item(fake_screen):
 
 def test_row_selected_not_dir(fake_screen):
     fake_screen.get_active = Mock(return_value=fake_screen.local_table)
-    fake_screen.local_table.selected = Mock(
-        return_value={"name": "file.txt", "is_dir": False}
-    )
+    fake_screen.local_table.selected = Mock(return_value={"name": "file.txt", "is_dir": False})
     fake_screen.local_fs.cd = Mock()
     fake_screen.refresh_local = Mock()
     fake_screen.on_data_table_row_selected(Mock())
@@ -531,9 +508,7 @@ async def test_copy_worker_exception_shows_notify(fake_screen):
         patch("arty_mc.ui.commander_screen.upload", side_effect=failing_upload),
         patch("arty_mc.ui.commander_screen.Path"),
     ):
-        fake_screen.run_worker = lambda coro, **kw: type(
-            "W", (), {"wait": lambda self: coro}
-        )()
+        fake_screen.run_worker = lambda coro, **kw: type("W", (), {"wait": lambda self: coro})()
         await fake_screen._copy_worker()
 
     fake_screen._show_error.assert_called_once()
@@ -584,9 +559,7 @@ async def test_delete_worker_exception_shows_dialog(fake_screen):
     entry.name = "file.txt"
 
     with patch("arty_mc.ui.commander_screen.DeletePanel", return_value=panel_instance):
-        fake_screen.run_worker = lambda coro, **kw: type(
-            "W", (), {"wait": lambda self: coro}
-        )()
+        fake_screen.run_worker = lambda coro, **kw: type("W", (), {"wait": lambda self: coro})()
         await fake_screen._delete_worker(entry)
 
     fake_screen._show_error.assert_called_once()
@@ -638,9 +611,7 @@ async def test_copy_worker_warn_handler_calls_notify(fake_screen):
         patch("arty_mc.ui.commander_screen.download", side_effect=fake_download),
         patch("arty_mc.ui.commander_screen.Path"),
     ):
-        fake_screen.run_worker = lambda coro, **kw: type(
-            "W", (), {"wait": lambda self: coro}
-        )()
+        fake_screen.run_worker = lambda coro, **kw: type("W", (), {"wait": lambda self: coro})()
         await fake_screen._copy_worker()
 
     notify_calls = fake_screen.notify.call_args_list
@@ -653,12 +624,10 @@ def test_show_error_calls_push_screen(fake_screen):
     from arty_mc.ui.error_dialog import ErrorDialog
 
     push_calls = []
-    mock_app = type(
-        "App", (), {"push_screen": lambda self, screen: push_calls.append(screen)}
-    )()
-    type(fake_screen).app = __import__(
-        "unittest.mock", fromlist=["PropertyMock"]
-    ).PropertyMock(return_value=mock_app)
+    mock_app = type("App", (), {"push_screen": lambda self, screen: push_calls.append(screen)})()
+    type(fake_screen).app = __import__("unittest.mock", fromlist=["PropertyMock"]).PropertyMock(
+        return_value=mock_app
+    )
 
     del fake_screen._show_error
     fake_screen._show_error("Something went wrong", title="Test Error")

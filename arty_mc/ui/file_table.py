@@ -42,9 +42,7 @@ class FileTable(DataTable):
             self.filtered_items = self.items.copy()
         else:
             pattern = f"*{pattern}*"
-            self.filtered_items = [
-                f for f in self.items if fnmatch.fnmatch(f["name"], pattern)
-            ]
+            self.filtered_items = [f for f in self.items if fnmatch.fnmatch(f["name"], pattern)]
         self.refresh_table()
 
     def refresh_table(self):

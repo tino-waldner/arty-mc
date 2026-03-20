@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
  
     steps:
     - uses: actions/checkout@v6
@@ -38,6 +38,6 @@ jobs:
         coverage xml
  
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@8f6ec407a34d5ec2b33d7d8f7f50279493b5efb4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}

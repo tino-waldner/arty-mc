@@ -127,9 +127,7 @@ def test_list_folder_properties_exception(api):
     stat.last_modified = None
     child.stat.return_value = stat
 
-    type(child).properties = property(
-        lambda self: (_ for _ in ()).throw(Exception("props fail"))
-    )
+    type(child).properties = property(lambda self: (_ for _ in ()).throw(Exception("props fail")))
 
     folder = MagicMock()
     folder.iterdir.return_value = [child]

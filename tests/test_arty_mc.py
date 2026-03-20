@@ -62,18 +62,13 @@ def test_on_mount_sets_config(monkeypatch):
 
 
 def test_on_mount_config_error_shows_dialog(monkeypatch):
-    """If load_config raises, on_mount shows a blocking ErrorDialog and exits on dismiss."""
     app = ArtyMc("repo")
     monkeypatch.setattr(
         "arty_mc.arty_mc.load_config",
-        lambda: (_ for _ in ()).throw(
-            RuntimeError("Config file missing: ~/.arty-mc.yml")
-        ),
+        lambda: (_ for _ in ()).throw(RuntimeError("Config file missing: ~/.arty-mc.yml")),
     )
     push_calls = []
-    app.push_screen = lambda screen, callback=None: push_calls.append(
-        (screen, callback)
-    )
+    app.push_screen = lambda screen, callback=None: push_calls.append((screen, callback))
 
     with patch("arty_mc.arty_mc.CommanderScreen"):
         app.on_mount()

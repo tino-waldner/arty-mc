@@ -42,16 +42,12 @@ class LocalFS:
                 real_path = os.path.realpath(path)
                 st = os.stat(real_path)
                 size = st.st_size
-                modified = datetime.fromtimestamp(st.st_mtime).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                modified = datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
 
                 mode = st.st_mode
                 if stat.S_ISDIR(mode):
                     is_dir = True
-                    if not (
-                        os.access(real_path, os.R_OK) and os.access(real_path, os.X_OK)
-                    ):
+                    if not (os.access(real_path, os.R_OK) and os.access(real_path, os.X_OK)):
                         is_unreadable = True
                     else:
                         try:
@@ -108,7 +104,6 @@ class LocalFS:
         return os.path.join(self.cwd, name)
 
     def is_accessible_from_ui(self, path) -> bool:
-        """Returns True if the path is accessible and copyable (non-empty dirs)."""
         return is_copyable(path)
 
     async def delete(self, name: str, progress_callback=None, cancel_event=None):

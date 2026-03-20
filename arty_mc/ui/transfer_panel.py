@@ -75,9 +75,7 @@ class TransferPanel(Widget):
             self.transferred = self.total
 
         self.progress.advance(bytes_step)
-        self.status.update(
-            f"{human_bytes(self.transferred)} / {human_bytes(self.total)}"
-        )
+        self.status.update(f"{human_bytes(self.transferred)} / {human_bytes(self.total)}")
 
     def _finish_ui(self):
         self.progress.update(progress=self.total)
