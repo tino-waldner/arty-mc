@@ -2,9 +2,11 @@
 
 ![CI](https://github.com/tino-waldner/arty-mc/actions/workflows/ci.yml/badge.svg)
 [![codecov](https://codecov.io/gh/tino-waldner/arty-mc/branch/main/graph/badge.svg)](https://codecov.io/gh/tino-waldner/arty-mc)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/7949d0c87b2745e8931deac94c7c359d)](https://app.codacy.com/gh/tino-waldner/arty-mc/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
+![Platform](https://img.shields.io/badge/platform-macos-lightgrey.svg)
 ![Status](https://img.shields.io/badge/status-experimental-orange.svg)
 
 ```text
