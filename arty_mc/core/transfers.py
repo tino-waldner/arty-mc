@@ -76,7 +76,7 @@ def create_session() -> Session:
     )
 
     session = Session()
-    session.mount("http://", adapter)  # noqa: S507
+    session.mount("http://", adapter)  # noqa: S507 # nosec
     session.mount("https://", adapter)
 
     return session

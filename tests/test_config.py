@@ -28,7 +28,7 @@ def test_load_config_success(tmp_path, monkeypatch):
     cfg = load_config()
     assert cfg["server"] == "https://example.com"
     assert cfg["user"] == "test"
-    assert cfg["token"] == "abc"  # noqa: S105
+    assert cfg["token"] == "abc"  # noqa: S105 # nosec
 
 
 def test_load_config_missing_file(tmp_path, monkeypatch):

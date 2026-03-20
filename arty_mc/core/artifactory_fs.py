@@ -132,7 +132,7 @@ class ArtifactoryFS:
             elif item.is_dir():
                 try:
                     item.rmdir()
-                except Exception:  # noqa: S110
+                except Exception:  # noqa: S110 # nosec
                     pass
         except Exception as e:
             raise RuntimeError(f"Failed to delete {item}: {e}") from e

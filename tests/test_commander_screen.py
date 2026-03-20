@@ -91,7 +91,7 @@ def fake_screen():
         async def runner():
             try:
                 await coro
-            except Exception:  # noqa: S110
+            except Exception:  # noqa: S110 # nosec
                 pass
 
         asyncio.create_task(runner())
