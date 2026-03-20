@@ -5,12 +5,14 @@ from textual import on  # type: ignore
 from textual.containers import Horizontal, Vertical  # type: ignore
 from textual.screen import Screen  # type: ignore
 from textual.widgets import DataTable, Footer, Header  # type: ignore
+from textual.worker import WorkerFailed  # type: ignore
 
 from arty_mc.core.artifactory_fs import ArtifactoryFS, FileEntry
 from arty_mc.core.local_fs import LocalFS
 from arty_mc.core.transfers import TransferEntry, download, upload
 from arty_mc.ui.confirm_dialog import ConfirmDialog
 from arty_mc.ui.delete_panel import DeletePanel
+from arty_mc.ui.error_dialog import ErrorDialog
 from arty_mc.ui.file_table import FileTable
 from arty_mc.ui.filter_bar import FilterBar
 from arty_mc.ui.path_line import PathLine
@@ -41,7 +43,7 @@ class CommanderScreen(Screen):
         self.worker = None
         self.cancel_event = asyncio.Event()
 
-    def compose(self):
+    def compose(self):  # pragma: no cover
         yield Header()
         with Horizontal():
             with Vertical():
@@ -63,7 +65,7 @@ class CommanderScreen(Screen):
                 yield self.remote_table
         yield Footer()
 
-    def on_mount(self):
+    def on_mount(self):  # pragma: no cover
         self.set_focus(self.local_table)
         self.refresh_local()
         self.refresh_remote()
@@ -72,10 +74,20 @@ class CommanderScreen(Screen):
         return self.local_table if self.active == "local" else self.remote_table
 
     def refresh_local(self):
-        self.local_table.load(self.local_fs.list())
+        try:
+            self.local_table.load(self.local_fs.list())
+        except Exception as e:
+            self._show_error(
+                f"Cannot read local directory:\n{e}", title="Local Filesystem Error"
+            )
 
     def refresh_remote(self):
-        self.remote_table.load(self.remote_fs.list())
+        try:
+            self.remote_table.load(self.remote_fs.list())
+        except Exception as e:
+            self._show_error(
+                f"Cannot reach Artifactory:\n{e}", title="Connection Error"
+            )
 
     def action_up(self):
         if self.active == "local":
@@ -113,6 +125,9 @@ class CommanderScreen(Screen):
         self.remote_filter.display = True
         self.set_focus(self.get_active())
 
+    def _show_error(self, message: str, title: str = "Error"):
+        self.app.push_screen(ErrorDialog(message, title=title))
+
     async def _copy_worker(self):
         self._lock_ui()
         self.transfer_panel = TransferPanel()
@@ -125,6 +140,9 @@ class CommanderScreen(Screen):
                 self.transfer_panel.advance(value)
             elif action == "finish":
                 self.transfer_panel.finish()
+
+        def warn_handler(message: str):
+            self.notify(message, severity="warning", timeout=8)
 
         try:
             item = self.get_active().selected()
@@ -147,7 +165,8 @@ class CommanderScreen(Screen):
                         auth=self.remote_fs.api.session.session.auth,
                         progress_callback=progress_handler,
                         cancel_event=self.cancel_event,
-                    )
+                    ),
+                    exit_on_error=False,
                 )
                 await self.worker.wait()
                 self.refresh_remote()
@@ -168,10 +187,17 @@ class CommanderScreen(Screen):
                         auth=self.remote_fs.api.session.session.auth,
                         progress_callback=progress_handler,
                         cancel_event=self.cancel_event,
-                    )
+                        warn_callback=warn_handler,
+                        use_aql=self.remote_fs.api.has_aql(),
+                    ),
+                    exit_on_error=False,
                 )
                 await self.worker.wait()
                 self.refresh_local()
+        except WorkerFailed as e:
+            self._show_error(f"Transfer failed:\n{e.error}", title="Transfer Error")
+        except Exception as e:
+            self._show_error(f"Transfer failed:\n{e}", title="Transfer Error")
         finally:
             await self.transfer_panel.remove()
             self._unlock_ui()
@@ -184,6 +210,18 @@ class CommanderScreen(Screen):
         if self.active == "local":
             src = self.local_fs.path(item["name"])
             if not self.local_fs.is_accessible_from_ui(src):
+                if item.get("is_dir"):
+                    self.notify(
+                        "Cannot copy: directory is empty or unreadable.",
+                        severity="warning",
+                        timeout=5,
+                    )
+                else:
+                    self.notify(
+                        "Cannot copy: file is not readable.",
+                        severity="warning",
+                        timeout=5,
+                    )
                 return
         else:
             src = f"{self.remote_fs.repo}/{self.remote_fs.path(item['name'])}"
@@ -226,7 +264,8 @@ class CommanderScreen(Screen):
                     target,
                     progress_callback=progress_handler,
                     cancel_event=self.cancel_event,
-                )
+                ),
+                exit_on_error=False,
             )
             await self.worker.wait()
 
@@ -234,6 +273,10 @@ class CommanderScreen(Screen):
                 self.refresh_local()
             else:
                 self.refresh_remote()
+        except WorkerFailed as e:
+            self._show_error(f"Delete failed:\n{e.error}", title="Delete Error")
+        except Exception as e:
+            self._show_error(f"Delete failed:\n{e}", title="Delete Error")
         finally:
             await self.delete_panel.remove()
             self._unlock_ui()
@@ -251,6 +294,11 @@ class CommanderScreen(Screen):
         if self.active == "local":
             path_name = f"{self.local_fs.cwd}/{entry.name}"
             if not self.local_fs.is_accessible_from_ui(path_name):
+                self.notify(
+                    "Cannot delete: file is not accessible.",
+                    severity="warning",
+                    timeout=5,
+                )
                 return
         else:
             path_name = f"{self.remote_fs.repo}/{self.remote_fs.path(entry.name)}"

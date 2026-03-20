@@ -7,6 +7,10 @@ from requests import Session as ReqSession  # type: ignore
 
 from arty_mc.core import transfers  # type: ignore
 
+# ---------------------------------------------------------------------------
+# ProgressFile
+# ---------------------------------------------------------------------------
+
 
 def test_progress_file_reads(tmp_path):
     file_path = tmp_path / "test.txt"
@@ -24,7 +28,6 @@ def test_progress_file_reads(tmp_path):
 
 
 def test_progress_file_context_manager(tmp_path):
-    """ProgressFile must close the file cleanly via __exit__."""
     file_path = tmp_path / "test.txt"
     file_path.write_text("abc")
     with transfers.ProgressFile(file_path) as pf:
@@ -388,20 +391,20 @@ def test_download_file_mid_read_cancel(tmp_path):
 
 
 def _make_aql_session(results):
-    """Session whose .post() returns an AQL JSON response."""
     session = MagicMock()
     resp = MagicMock()
     resp.json.return_value = {"results": results}
     resp.raise_for_status = MagicMock()
     session.post.return_value = resp
+    # HEAD for single-file size
     head_resp = MagicMock()
     head_resp.headers = {"Content-Length": "0"}
     session.head.return_value = head_resp
     return session
 
 
-def test_aql_expand_entry_single_file(tmp_path):
-    """AQL query returns one file; entry list has size populated."""
+def test_aql_expand_entry_single_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", None)  # reset cache
     results = [{"repo": "my-repo", "path": "a/b", "name": "file.txt", "size": 1234}]
     session = _make_aql_session(results)
     entry = transfers.TransferEntry(
@@ -418,8 +421,8 @@ def test_aql_expand_entry_single_file(tmp_path):
     assert expanded[0].local.name == "file.txt"
 
 
-def test_aql_expand_entry_root_path(tmp_path):
-    """When folder_path == '.' (repo root) the path clause uses '*'."""
+def test_aql_expand_entry_root_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", None)  # reset cache
     results = [{"repo": "repo", "path": ".", "name": "root.txt", "size": 42}]
     session = _make_aql_session(results)
     entry = transfers.TransferEntry(
@@ -438,7 +441,6 @@ def test_aql_expand_entry_fallback_on_error(tmp_path, monkeypatch):
     session = MagicMock()
     session.post.side_effect = Exception("AQL unavailable")
 
-    # Make _rglob_expand_entry return a dummy result
     dummy_entry = transfers.TransferEntry(
         local=tmp_path / "f.txt", remote="r", is_dir=False, size=99
     )
@@ -552,7 +554,6 @@ def test_rglob_expand_entry_stat_exception(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_expand_entries_single_file_head(tmp_path):
-    """Single file entry uses HEAD to get size — no AQL."""
     session = MagicMock()
     head_resp = MagicMock()
     head_resp.headers = {"Content-Length": "512"}
@@ -634,12 +635,11 @@ async def test_download_single_file_end_to_end(tmp_path, monkeypatch):
     )
     events = []
     session = _make_dummy_get_session(chunks=(b"hello",))
-    # HEAD returns size
     head_mock = MagicMock()
     head_mock.headers = {"Content-Length": "5"}
     session_mock = MagicMock()
     session_mock.head.return_value = head_mock
-    session_mock.get = session.get  # reuse streaming get
+    session_mock.get = session.get
 
     monkeypatch.setattr(transfers, "create_session", lambda: session_mock)
     await transfers.download(
@@ -715,3 +715,165 @@ async def test_download_file_mid_cancel_via_limited(tmp_path):
             semaphore,
             cancel_event=cancel_event,
         )
+
+
+def test_aql_fallback_calls_warn_callback(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", None)  # reset cache
+    session = MagicMock()
+    session.post.side_effect = Exception("403 Forbidden")
+
+    warnings = []
+    dummy_entry = transfers.TransferEntry(
+        local=tmp_path / "f.txt", remote="r", is_dir=False, size=0
+    )
+    monkeypatch.setattr(
+        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0)
+    )
+
+    entry = transfers.TransferEntry(
+        local=tmp_path,
+        remote="https://srv/artifactory/repo/path",
+        is_dir=True,
+    )
+    transfers._aql_expand_entry(
+        entry,
+        "https://srv",
+        session,
+        auth=None,
+        warn_callback=lambda msg: warnings.append(msg),
+    )
+
+    assert len(warnings) == 1
+    assert "AQL" in warnings[0]
+    assert "fallback" in warnings[0].lower() or "walk" in warnings[0].lower()
+
+
+def test_aql_warn_fires_only_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", None)  # reset cache
+    session = MagicMock()
+    session.post.side_effect = Exception("404 Not Found")
+
+    warnings = []
+    dummy_entry = transfers.TransferEntry(
+        local=tmp_path / "f.txt", remote="r", is_dir=False, size=0
+    )
+    monkeypatch.setattr(
+        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0)
+    )
+
+    entry = transfers.TransferEntry(
+        local=tmp_path,
+        remote="https://srv/artifactory/repo/path",
+        is_dir=True,
+    )
+    cb = lambda msg: warnings.append(msg)
+
+    transfers._aql_expand_entry(
+        entry, "https://srv", session, auth=None, warn_callback=cb
+    )
+    assert len(warnings) == 1
+
+    transfers._aql_expand_entry(
+        entry, "https://srv", session, auth=None, warn_callback=cb
+    )
+    assert len(warnings) == 1
+    assert session.post.call_count == 1
+
+
+def test_aql_no_warn_when_already_known_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", False)
+    session = MagicMock()
+    warnings = []
+    dummy_entry = transfers.TransferEntry(
+        local=tmp_path / "f.txt", remote="r", is_dir=False, size=0
+    )
+    monkeypatch.setattr(
+        transfers, "_rglob_expand_entry", lambda *a, **k: ([dummy_entry], 0)
+    )
+
+    entry = transfers.TransferEntry(
+        local=tmp_path,
+        remote="https://srv/artifactory/repo/path",
+        is_dir=True,
+    )
+    transfers._aql_expand_entry(
+        entry,
+        "https://srv",
+        session,
+        auth=None,
+        warn_callback=lambda msg: warnings.append(msg),
+    )
+
+    assert warnings == []
+    session.post.assert_not_called()
+
+
+def test_aql_no_warn_callback_on_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", None)  # reset cache
+    results = [{"repo": "r", "path": "p", "name": "f.txt", "size": 10}]
+    session = MagicMock()
+    resp = MagicMock()
+    resp.json.return_value = {"results": results}
+    resp.raise_for_status = MagicMock()
+    session.post.return_value = resp
+
+    warnings = []
+    entry = transfers.TransferEntry(
+        local=tmp_path / "folder",
+        remote="https://srv/artifactory/repo/p/folder",
+        is_dir=True,
+    )
+    transfers._aql_expand_entry(
+        entry,
+        "https://srv",
+        session,
+        auth=None,
+        warn_callback=lambda msg: warnings.append(msg),
+    )
+    assert warnings == []
+
+
+@pytest.mark.asyncio
+async def test_download_passes_warn_callback(tmp_path, monkeypatch):
+    warnings = []
+
+    async def fake_expand(entries, base_url, session, auth, warn_callback=None):
+        if warn_callback:
+            warn_callback("test warning")
+        return [], 0
+
+    monkeypatch.setattr(transfers, "expand_entries", fake_expand)
+    monkeypatch.setattr(transfers, "create_session", lambda: MagicMock())
+
+    await transfers.download(
+        [],
+        base_url="https://srv",
+        warn_callback=lambda msg: warnings.append(msg),
+    )
+    assert warnings == ["test warning"]
+
+
+@pytest.mark.asyncio
+async def test_download_use_aql_false_skips_probe(tmp_path, monkeypatch):
+    monkeypatch.setattr(transfers, "_aql_available", None)
+
+    expanded_entry = transfers.TransferEntry(
+        local=tmp_path / "file.txt",
+        remote="https://srv/artifactory/repo/file.txt",
+        is_dir=False,
+    )
+    session_mock = MagicMock()
+    head_resp = MagicMock()
+    head_resp.headers = {"Content-Length": "10"}
+    session_mock.head.return_value = head_resp
+    session_mock.get = _make_dummy_get_session(chunks=(b"hello",)).get
+    monkeypatch.setattr(transfers, "create_session", lambda: session_mock)
+
+    await transfers.download(
+        [expanded_entry],
+        base_url="https://srv",
+        use_aql=False,
+    )
+
+    assert transfers._aql_available is False
+    session_mock.post.assert_not_called()

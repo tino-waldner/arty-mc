@@ -145,3 +145,56 @@ def test_list_folder_properties_exception(api):
             "modified": None,
         }
     ]
+
+
+def test_get_license_returns_license_field(config):
+    with patch("arty_mc.core.api_client.AuthSession") as mock_session:
+        api = ArtifactoryAPI(config)
+        mock_session.return_value.get.return_value = {
+            "version": "7.x",
+            "license": "OSS",
+        }
+        api.session = mock_session.return_value
+        assert api.get_license() == "OSS"
+
+
+def test_get_license_cached(config):
+    with patch("arty_mc.core.api_client.AuthSession") as mock_session:
+        api = ArtifactoryAPI(config)
+        mock_session.return_value.get.return_value = {"license": "Pro"}
+        api.session = mock_session.return_value
+        api.get_license()
+        api.get_license()  # second call should NOT hit the network
+        assert mock_session.return_value.get.call_count == 1
+
+
+def test_get_license_returns_unknown_on_error(config):
+    with patch("arty_mc.core.api_client.AuthSession") as mock_session:
+        api = ArtifactoryAPI(config)
+        mock_session.return_value.get.side_effect = Exception("network error")
+        api.session = mock_session.return_value
+        assert api.get_license() == "unknown"
+
+
+def test_has_aql_false_for_oss(config):
+    with patch("arty_mc.core.api_client.AuthSession") as mock_session:
+        api = ArtifactoryAPI(config)
+        mock_session.return_value.get.return_value = {"license": "OSS"}
+        api.session = mock_session.return_value
+        assert api.has_aql() is False
+
+
+def test_has_aql_false_when_unknown(config):
+    with patch("arty_mc.core.api_client.AuthSession") as mock_session:
+        api = ArtifactoryAPI(config)
+        mock_session.return_value.get.side_effect = Exception("unreachable")
+        api.session = mock_session.return_value
+        assert api.has_aql() is False
+
+
+def test_has_aql_true_for_pro(config):
+    with patch("arty_mc.core.api_client.AuthSession") as mock_session:
+        api = ArtifactoryAPI(config)
+        mock_session.return_value.get.return_value = {"license": "Pro"}
+        api.session = mock_session.return_value
+        assert api.has_aql() is True

@@ -108,6 +108,7 @@ class LocalFS:
         return os.path.join(self.cwd, name)
 
     def is_accessible_from_ui(self, path) -> bool:
+        """Returns True if the path is accessible and copyable (non-empty dirs)."""
         return is_copyable(path)
 
     async def delete(self, name: str, progress_callback=None, cancel_event=None):
@@ -131,9 +132,9 @@ class LocalFS:
                 if os.path.isfile(path) or os.path.islink(path):
                     os.remove(path)
                 elif os.path.isdir(path):
-                    shutil.rmtree(path, ignore_errors=True)
+                    shutil.rmtree(path, ignore_errors=False)
         except Exception as e:
-            print(f"Failed to delete {path}: {e}")
-
-        if progress_callback:
-            progress_callback("advance", 1)
+            raise RuntimeError(f"Failed to delete {path}: {e}") from e
+        finally:
+            if progress_callback:
+                progress_callback("advance", 1)

@@ -74,10 +74,13 @@ class ArtifactoryFS:
         cancel_event = cancel_event or asyncio.Event()
         semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
-        remote_root = ArtifactoryPath(
-            f"{self.server}/{entry.repo}/{self.path(entry.name)}",
-            auth=self.auth,
-        )
+        try:
+            remote_root = ArtifactoryPath(
+                f"{self.server}/{entry.repo}/{self.path(entry.name)}",
+                auth=self.auth,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Cannot reach Artifactory: {e}") from e
 
         delete_queue = [remote_root]
 
@@ -90,30 +93,41 @@ class ArtifactoryFS:
             async with semaphore:
                 await asyncio.to_thread(self._delete_item, item, progress_callback)
 
-        while delete_queue:
-            current = delete_queue.pop(0)
-            if cancel_event.is_set():
-                break
+        try:
+            while delete_queue:
+                current = delete_queue.pop(0)
+                if cancel_event.is_set():
+                    break
 
-            if current.is_file():
-                if progress_callback:
-                    progress_callback("add_total", 1)
-                await delete_worker(current)
-            elif current.is_dir():
                 try:
-                    children = list(current.iterdir())
-                except Exception:
-                    children = []
+                    is_file = current.is_file()
+                    is_dir = current.is_dir()
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Connection lost during delete: {e}"
+                    ) from e
 
-                for child in children:
-                    delete_queue.append(child)
+                if is_file:
                     if progress_callback:
                         progress_callback("add_total", 1)
+                    await delete_worker(current)
+                elif is_dir:
+                    try:
+                        children = list(current.iterdir())
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Connection lost while listing directory: {e}"
+                        ) from e
 
-                await delete_worker(current)
+                    for child in children:
+                        delete_queue.append(child)
+                        if progress_callback:
+                            progress_callback("add_total", 1)
 
-        if progress_callback:
-            progress_callback("finish", None)
+                    await delete_worker(current)
+        finally:
+            if progress_callback:
+                progress_callback("finish", None)
 
     def _delete_item(self, item, progress_callback=None):
         try:
@@ -124,8 +138,8 @@ class ArtifactoryFS:
                     item.rmdir()
                 except Exception:
                     pass
-        except Exception:
-            pass
-
-        if progress_callback:
-            progress_callback("advance", 1)
+        except Exception as e:
+            raise RuntimeError(f"Failed to delete {item}: {e}") from e
+        finally:
+            if progress_callback:
+                progress_callback("advance", 1)

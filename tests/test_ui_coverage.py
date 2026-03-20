@@ -3,6 +3,7 @@ import pytest  # type: ignore
 from arty_mc.ui.commander_screen import CommanderScreen  # type: ignore
 from arty_mc.ui.confirm_dialog import ConfirmDialog  # type: ignore
 from arty_mc.ui.delete_panel import DeletePanel  # type: ignore
+from arty_mc.ui.error_dialog import ErrorDialog  # type: ignore
 from arty_mc.ui.transfer_panel import TransferPanel  # type: ignore
 
 
@@ -34,3 +35,8 @@ def test_delete_panel_instantiation():
 def test_transfer_panel_instantiation():
     panel = TransferPanel()
     assert panel is not None
+
+
+def test_error_dialog_instantiation():
+    dialog = ErrorDialog("Something failed")
+    assert dialog is not None

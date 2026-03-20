@@ -11,6 +11,25 @@ class ArtifactoryAPI:
         self.session = AuthSession(config["server"], config["user"], config["token"])
         self.base_url = config["server"].rstrip("/")
         self.apikey = config["token"]
+        self._license: str | None = None
+
+    def get_license(self) -> str:
+        """Return the Artifactory license type e.g. 'OSS', 'Pro', 'Enterprise'.
+
+        Cached after the first call. Returns 'unknown' on any error.
+        """
+        if self._license is not None:
+            return self._license
+        try:
+            data = self.session.get("/api/system/version")
+            self._license = data.get("license", "unknown")
+        except Exception:
+            self._license = "unknown"
+        return self._license
+
+    def has_aql(self) -> bool:
+        """Return True if this Artifactory instance supports AQL search."""
+        return self.get_license().upper() not in ("OSS", "UNKNOWN")
 
     def list_folder(self, repo, path=""):
         repo_path = f"{repo}/{path.lstrip('/').rstrip('/')}"

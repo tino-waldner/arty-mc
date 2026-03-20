@@ -1,6 +1,7 @@
 import asyncio
+import json
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from artifactory import ArtifactoryPath  # type: ignore
 from requests import Session  # type: ignore
@@ -11,6 +12,10 @@ from arty_mc.core.fs_utils import is_accessible
 
 CHUNK_SIZE = 4 * 1024 * 1024
 CONCURRENCY_LIMIT = 4
+
+# Cached result of the first AQL probe.
+# None = not yet tried, True = works, False = unavailable on this server.
+_aql_available: Optional[bool] = None
 
 
 class TransferEntry:
@@ -138,7 +143,10 @@ async def expand_upload_entries(
 
 
 async def upload(
-    entries: List[TransferEntry], auth=None, progress_callback=None, cancel_event=None
+    entries: List[TransferEntry],
+    auth=None,
+    progress_callback=None,
+    cancel_event=None,
 ):
     cancel_event = cancel_event or asyncio.Event()
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
@@ -152,9 +160,7 @@ async def upload(
         progress_callback("start", total_bytes)
 
     tasks = [
-        upload_file_limited(
-            entry, session, semaphore, auth, progress_callback, cancel_event
-        )
+        upload_file_limited(entry, session, semaphore, auth, progress_callback, cancel_event)
         for entry in entries
     ]
 
@@ -206,14 +212,28 @@ def _aql_expand_entry(
     base_url: str,
     session: Session,
     auth,
+    warn_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[TransferEntry], int]:
+    """Use a single AQL query to list all files under a remote path,
+    returning (expanded_entries, total_bytes).
+
+    Falls back to rglob-based expansion if AQL is unavailable. The result
+    of the first probe is cached so the warning fires at most once per
+    process — not on every download.
+    """
+    global _aql_available
+
+    # If we already know AQL is unavailable on this server, skip straight
+    # to the fallback without attempting the request or warning again.
+    if _aql_available is False:
+        return _rglob_expand_entry(entry, auth)
+
     artifactory_base = base_url.rstrip("/") + "/artifactory"
-    rel = entry.remote[len(artifactory_base) :].lstrip("/")
+    rel = entry.remote[len(artifactory_base):].lstrip("/")
     parts = rel.split("/", 1)
     repo = parts[0]
     folder_path = parts[1] if len(parts) > 1 else "."
 
-    # Build AQL: one request returns all files + sizes recursively
     if folder_path == ".":
         path_clause = '"path": {"$match": "*"}'
     else:
@@ -221,14 +241,14 @@ def _aql_expand_entry(
             f'"$or": ['
             f'{{"path": "{folder_path}"}}, '
             f'{{"path": {{"$match": "{folder_path}/*"}}}}'
-            f"]"
+            f']' 
         )
 
     aql = (
-        f"items.find({{"
+        f'items.find({{' 
         f'"repo": "{repo}", '
         f'"type": "file", '
-        f"{path_clause}"
+        f'{path_clause}'
         f'}}).include("repo", "path", "name", "size")'
     )
 
@@ -244,7 +264,15 @@ def _aql_expand_entry(
         )
         r.raise_for_status()
         results = r.json().get("results", [])
-    except Exception:
+        _aql_available = True
+    except Exception as e:
+        _aql_available = False
+        if warn_callback:
+            warn_callback(
+                f"AQL search not available ({e}). "
+                f"This is expected on Artifactory OSS. "
+                f"Downloads will use a slower directory walk."
+            )
         return _rglob_expand_entry(entry, auth)
 
     expanded = []
@@ -258,9 +286,7 @@ def _aql_expand_entry(
         remote_file_url = f"{artifactory_base}/{repo}/{item_path}/{item_name}"
 
         if folder_path == ".":
-            rel_path = (
-                Path(item_path) / item_name if item_path != "." else Path(item_name)
-            )
+            rel_path = Path(item_path) / item_name if item_path != "." else Path(item_name)
         else:
             full_item_path = f"{item_path}/{item_name}"
             try:
@@ -283,7 +309,9 @@ def _aql_expand_entry(
     return expanded, total_bytes
 
 
-def _rglob_expand_entry(entry: TransferEntry, auth) -> Tuple[List[TransferEntry], int]:
+def _rglob_expand_entry(
+    entry: TransferEntry, auth
+) -> Tuple[List[TransferEntry], int]:
     """Fallback: walk the remote tree with rglob + stat per file."""
     root = ArtifactoryPath(entry.remote, auth=auth)
     entry.local.mkdir(parents=True, exist_ok=True)
@@ -320,7 +348,13 @@ async def expand_entries(
     base_url: str,
     session: Session,
     auth,
+    warn_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[TransferEntry], int]:
+    """Expand all entries into individual files, returning (entries, total_bytes).
+
+    For single files: no expansion needed, size comes from a HEAD request.
+    For directories: uses AQL (single request) with rglob fallback.
+    """
     expanded = []
     total_bytes = 0
 
@@ -333,13 +367,11 @@ async def expand_entries(
                 size = 0
             total_bytes += size
             expanded.append(
-                TransferEntry(
-                    local=entry.local, remote=entry.remote, is_dir=False, size=size
-                )
+                TransferEntry(local=entry.local, remote=entry.remote, is_dir=False, size=size)
             )
         else:
             sub_entries, sub_bytes = await asyncio.to_thread(
-                _aql_expand_entry, entry, base_url, session, auth
+                _aql_expand_entry, entry, base_url, session, auth, warn_callback
             )
             expanded.extend(sub_entries)
             total_bytes += sub_bytes
@@ -353,20 +385,29 @@ async def download(
     auth=None,
     progress_callback=None,
     cancel_event=None,
+    warn_callback: Optional[Callable[[str], None]] = None,
+    use_aql: bool = True,
 ):
+    global _aql_available
     cancel_event = cancel_event or asyncio.Event()
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     session = create_session()
 
-    entries, total_bytes = await expand_entries(entries, base_url, session, auth)
+    # If the caller already knows AQL is unavailable (e.g. Artifactory OSS),
+    # pre-set the sentinel so _aql_expand_entry skips straight to rglob
+    # without attempting the request or warning.
+    if not use_aql:
+        _aql_available = False
+
+    entries, total_bytes = await expand_entries(
+        entries, base_url, session, auth, warn_callback
+    )
 
     if progress_callback:
         progress_callback("start", total_bytes)
 
     tasks = [
-        download_file_limited(
-            entry, session, semaphore, auth, progress_callback, cancel_event
-        )
+        download_file_limited(entry, session, semaphore, auth, progress_callback, cancel_event)
         for entry in entries
     ]
 

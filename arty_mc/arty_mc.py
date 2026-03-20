@@ -4,6 +4,7 @@ from textual.app import App  # type: ignore
 
 from arty_mc.config import load_config
 from arty_mc.ui.commander_screen import CommanderScreen
+from arty_mc.ui.error_dialog import ErrorDialog
 
 
 class ArtyMc(App):
@@ -14,7 +15,18 @@ class ArtyMc(App):
         self.repo = repo
 
     def on_mount(self):
-        config = load_config()
+        try:
+            config = load_config()
+        except RuntimeError as e:
+
+            def on_dismiss():
+                self.exit()
+
+            self.push_screen(
+                ErrorDialog(str(e), title="Configuration Error"),
+                callback=lambda _: on_dismiss(),
+            )
+            return
         config["default_repo"] = self.repo
         self.push_screen(CommanderScreen(config))
 
@@ -36,5 +48,5 @@ def main():
     app.run()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

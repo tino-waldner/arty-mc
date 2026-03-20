@@ -3,6 +3,10 @@ import stat
 
 
 def is_accessible(path) -> bool:
+    """Return True if path exists, is readable, and is a regular file or directory.
+
+    Handles dead symlinks, permission errors, and special files gracefully.
+    """
     try:
         if os.path.islink(path) and not os.path.exists(path):
             return False
@@ -22,7 +26,10 @@ def is_accessible(path) -> bool:
 
 
 def is_copyable(path) -> bool:
+    """Return True if path is accessible AND non-empty (for directories).
 
+    Empty local directories cannot be copied to Artifactory.
+    """
     if not is_accessible(path):
         return False
 

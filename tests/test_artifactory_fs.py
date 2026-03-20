@@ -99,7 +99,8 @@ def test_delete_item_exceptions(monkeypatch):
             raise OSError("fail")
 
     fs = make_fs(monkeypatch)
-    fs._delete_item(FakeItem())
+    with pytest.raises(RuntimeError, match="Failed to delete"):
+        fs._delete_item(FakeItem())
 
 
 def test_delete_item_rmdir_exception(monkeypatch):
@@ -114,7 +115,7 @@ def test_delete_item_rmdir_exception(monkeypatch):
             pass
 
         def rmdir(self):
-            raise OSError("fail")  # triggers except branch
+            raise OSError("fail")
 
     fs = make_fs(monkeypatch)
     fs._delete_item(FakeDir())
@@ -211,7 +212,7 @@ async def test_delete_nested_with_exceptions(monkeypatch):
             return self.children
 
         def unlink(self):
-            raise OSError("fail")
+            pass  # file deletes succeed
 
         def rmdir(self):
             raise OSError("fail")
@@ -261,7 +262,7 @@ async def test_delete_multiple_files_concurrency(monkeypatch):
         def rmdir(self):
             pass
 
-    files = [FakeNode(f"file{i}") for i in range(5)]  # 5 files > MAX_CONCURRENCY=4
+    files = [FakeNode(f"file{i}") for i in range(5)]
     root = FakeNode("root", children=files)
     monkeypatch.setattr(
         "arty_mc.core.artifactory_fs.ArtifactoryPath",
@@ -331,7 +332,7 @@ async def test_delete_iterdir_exception(monkeypatch):
             return True
 
         def iterdir(self):
-            raise OSError("fail")  # triggers except branch
+            raise OSError("fail")
 
         def unlink(self):
             pass
@@ -348,4 +349,146 @@ async def test_delete_iterdir_exception(monkeypatch):
     fs = make_fs(monkeypatch)
     entry = type("E", (), {"repo": "repo", "name": "root"})
 
-    await fs.delete(entry)
+    with pytest.raises(RuntimeError, match="Connection lost"):
+        await fs.delete(entry)
+
+
+@pytest.mark.asyncio
+async def test_delete_connection_lost_on_is_file(monkeypatch):
+    """If is_file() raises mid-walk, RuntimeError propagates and finish is still called."""
+    monkeypatch.setattr(
+        "arty_mc.core.artifactory_fs.ArtifactoryAPI",
+        lambda config: FakeAPI(),
+    )
+
+    class FlakyNode:
+        def is_file(self):
+            raise ConnectionError("connection reset")
+
+        def is_dir(self):
+            return False
+
+        def iterdir(self):
+            return []
+
+        def unlink(self):
+            pass
+
+        def rmdir(self):
+            pass
+
+    monkeypatch.setattr(
+        "arty_mc.core.artifactory_fs.ArtifactoryPath",
+        lambda *a, **k: FlakyNode(),
+    )
+
+    fs = make_fs(monkeypatch)
+    entry = type("E", (), {"repo": "repo", "name": "file.txt"})
+    events = []
+
+    with pytest.raises(RuntimeError, match="Connection lost"):
+        await fs.delete(entry, progress_callback=lambda e, v: events.append(e))
+
+    assert "finish" in events
+
+
+@pytest.mark.asyncio
+async def test_delete_connection_lost_on_iterdir(monkeypatch):
+    """If iterdir() raises, RuntimeError propagates and finish is still called."""
+    monkeypatch.setattr(
+        "arty_mc.core.artifactory_fs.ArtifactoryAPI",
+        lambda config: FakeAPI(),
+    )
+
+    class FlakyDir:
+        def is_file(self):
+            return False
+
+        def is_dir(self):
+            return True
+
+        def iterdir(self):
+            raise ConnectionError("connection reset")
+
+        def unlink(self):
+            pass
+
+        def rmdir(self):
+            pass
+
+    monkeypatch.setattr(
+        "arty_mc.core.artifactory_fs.ArtifactoryPath",
+        lambda *a, **k: FlakyDir(),
+    )
+
+    fs = make_fs(monkeypatch)
+    entry = type("E", (), {"repo": "repo", "name": "folder"})
+    events = []
+
+    with pytest.raises(RuntimeError, match="Connection lost"):
+        await fs.delete(entry, progress_callback=lambda e, v: events.append(e))
+
+    assert "finish" in events
+
+
+@pytest.mark.asyncio
+async def test_delete_item_raises_on_unlink_failure(monkeypatch):
+    """_delete_item raises RuntimeError if unlink fails."""
+
+    class FailNode:
+        def is_file(self):
+            return True
+
+        def is_dir(self):
+            return False
+
+        def unlink(self):
+            raise OSError("permission denied")
+
+        def __str__(self):
+            return "fake/file.txt"
+
+    fs = make_fs(monkeypatch)
+    with pytest.raises(RuntimeError, match="Failed to delete"):
+        fs._delete_item(FailNode())
+
+
+@pytest.mark.asyncio
+async def test_delete_item_progress_always_fires(monkeypatch):
+    class FailNode:
+        def is_file(self):
+            return True
+
+        def is_dir(self):
+            return False
+
+        def unlink(self):
+            raise OSError("disk error")
+
+        def __str__(self):
+            return "fake/file.txt"
+
+    fs = make_fs(monkeypatch)
+    events = []
+
+    with pytest.raises(RuntimeError):
+        fs._delete_item(FailNode(), progress_callback=lambda e, v: events.append(e))
+
+    assert "advance" in events
+
+
+@pytest.mark.asyncio
+async def test_delete_artifactory_path_construction_fails(monkeypatch):
+    monkeypatch.setattr(
+        "arty_mc.core.artifactory_fs.ArtifactoryAPI",
+        lambda config: FakeAPI(),
+    )
+    monkeypatch.setattr(
+        "arty_mc.core.artifactory_fs.ArtifactoryPath",
+        lambda *a, **k: (_ for _ in ()).throw(ConnectionError("refused")),
+    )
+    fs = make_fs(monkeypatch)
+    entry = type("E", (), {"repo": "repo", "name": "file.txt"})
+
+    with pytest.raises(RuntimeError, match="Cannot reach Artifactory"):
+        await fs.delete(entry)

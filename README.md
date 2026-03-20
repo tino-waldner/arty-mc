@@ -117,9 +117,6 @@ This starts the **dual-pane interface** where you can browse your local filesyst
 >   ❌ These **cannot** be copied to Artifactory as they are **not supported**.
 >
 > - **Dead Symlinks** on your local filesystem are highlighted in **red**.  
->   ❌ These **cannot** be copied to Artifactory.
->
-> - **Unreadable Files** on your local filesystem are highlighted in **gray**.  
 >   ❌ These **cannot** be copied to Artifactory either.
 >
 > 💡 **Tip:**  

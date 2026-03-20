@@ -1,43 +1,42 @@
 name: CI
-
+ 
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-
+ 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
-
+    runs-on: ${{ matrix.os }}
+ 
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
-
+ 
     steps:
-    - uses: actions/checkout@v4
-
+    - uses: actions/checkout@v6
+ 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-
+ 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
-        pip install pytest coverage
-
-    - name: Install your package
+ 
+    - name: Install package
       run: pip install .
-
+ 
     - name: Run tests
       run: |
         coverage run -m pytest
         coverage report
         coverage xml
-
+ 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
       with:

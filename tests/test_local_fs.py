@@ -372,4 +372,24 @@ async def test_delete_exception(monkeypatch, tmp_path):
     )
     fs = LocalFS()
     fs.cwd = str(tmp_path)
-    await fs.delete("file.txt")
+    # RuntimeError now propagates so the UI can show it
+    with pytest.raises(RuntimeError, match="cannot delete"):
+        await fs.delete("file.txt")
+
+
+@pytest.mark.asyncio
+async def test_delete_item_progress_fires_on_error(monkeypatch, tmp_path):
+    """progress_callback advance fires even when _delete_item raises."""
+    f = tmp_path / "file.txt"
+    f.write_text("data")
+    monkeypatch.setattr(
+        os, "remove", lambda *a, **k: (_ for _ in ()).throw(OSError("disk error"))
+    )
+    fs = LocalFS()
+    fs.cwd = str(tmp_path)
+    events = []
+
+    with pytest.raises(RuntimeError):
+        fs._delete_item(str(f), progress_callback=lambda e, v: events.append(e))
+
+    assert "advance" in events

@@ -14,8 +14,6 @@ class DummyWorker:
 
 @pytest.fixture(autouse=True)
 def patch_transfers():
-    """Stub out the actual upload/download coroutines so no network I/O occurs."""
-
     async def dummy_coro(*args, **kwargs):
         return None
 
@@ -33,11 +31,18 @@ def patch_transfers():
 @pytest.fixture(autouse=True)
 def patch_textual_ui():
     with (
-        patch("arty_mc.ui.commander_screen.TransferPanel", autospec=True) as mock_tp,
-        patch("arty_mc.ui.commander_screen.DeletePanel", autospec=True) as mock_dp,
+        patch("arty_mc.ui.commander_screen.TransferPanel") as mock_tp,
+        patch("arty_mc.ui.commander_screen.DeletePanel") as mock_dp,
     ):
         mock_tp.return_value.remove = AsyncMock(return_value=None)
+        mock_tp.return_value.start = Mock()
+        mock_tp.return_value.advance = Mock()
+        mock_tp.return_value.finish = Mock()
         mock_dp.return_value.remove = AsyncMock(return_value=None)
+        mock_dp.return_value.start = Mock()
+        mock_dp.return_value.advance = Mock()
+        mock_dp.return_value.finish = Mock()
+        mock_dp.return_value.increment_total = Mock()
         yield mock_tp, mock_dp
 
 
@@ -84,7 +89,7 @@ def fake_screen():
     screen.local_path_line = Mock()
     screen.remote_path_line = Mock()
 
-    def run_worker_mock(coro):
+    def run_worker_mock(coro, **kwargs):
         worker = DummyWorker()
 
         async def runner():
@@ -103,6 +108,8 @@ def fake_screen():
         return_value=Mock(selected=Mock(return_value=fake_item), ancestors_with_self=[])
     )
     screen.cancel_event = Mock()
+    # Capture _show_error calls for test assertions
+    screen._show_error = Mock()
     return screen
 
 
@@ -172,7 +179,7 @@ async def test_copy_worker_progress_coverage(fake_screen):
         patch("arty_mc.ui.commander_screen.Path") as mock_path_class,
     ):
         mock_path_class.return_value = Mock(stat=lambda: Mock(st_size=789012))
-        fake_screen.run_worker = lambda coro: type(
+        fake_screen.run_worker = lambda coro, **kw: type(
             "W", (), {"wait": lambda self: coro}
         )()
         await fake_screen._copy_worker()
@@ -220,7 +227,7 @@ async def test_delete_worker_progress_coverage(fake_screen):
     fake_screen.local_fs.delete = fake_delete
 
     with patch("arty_mc.ui.commander_screen.DeletePanel", return_value=panel_instance):
-        fake_screen.run_worker = lambda coro: type(
+        fake_screen.run_worker = lambda coro, **kw: type(
             "W", (), {"wait": lambda self: coro}
         )()
         await fake_screen._delete_worker(entry)
@@ -241,6 +248,7 @@ def test_action_up_local_success(fake_screen):
 
 
 def test_action_up_local_blocked(fake_screen):
+    """When up() returns False (inaccessible parent), no refresh should happen."""
     fake_screen.active = "local"
     fake_screen.local_fs.up = Mock(return_value=False)
     fake_screen.refresh_local = Mock()
@@ -391,6 +399,7 @@ def test_row_selected_local_dir(fake_screen):
 
 
 def test_row_selected_local_dir_cd_blocked(fake_screen):
+    """If cd() returns False, no refresh should happen."""
     fake_screen.active = "local"
     fake_screen.get_active = Mock(return_value=fake_screen.local_table)
     fake_screen.local_table.selected = Mock(
@@ -418,7 +427,7 @@ def test_row_selected_remote_dir(fake_screen):
 def test_row_selected_no_item(fake_screen):
     fake_screen.get_active = Mock(return_value=fake_screen.local_table)
     fake_screen.local_table.selected = Mock(return_value=None)
-    fake_screen.on_data_table_row_selected(Mock())  # should not raise
+    fake_screen.on_data_table_row_selected(Mock())
 
 
 def test_row_selected_not_dir(fake_screen):
@@ -456,3 +465,205 @@ def test_get_active_real_tables():
         assert screen.get_active() == "LOCAL"
         screen.active = "remote"
         assert screen.get_active() == "REMOTE"
+
+
+def test_refresh_remote_error_shows_dialog(fake_screen):
+    fake_screen.remote_fs.list = Mock(side_effect=RuntimeError("connection refused"))
+    fake_screen.refresh_remote()
+    fake_screen._show_error.assert_called_once()
+    args = fake_screen._show_error.call_args[0]
+    assert "Artifactory" in args[0] or "connection" in args[0].lower()
+
+
+def test_refresh_local_error_shows_dialog(fake_screen):
+    fake_screen.local_fs.list = Mock(side_effect=OSError("permission denied"))
+    fake_screen.refresh_local()
+    fake_screen._show_error.assert_called_once()
+    args = fake_screen._show_error.call_args[0]
+    assert "local" in args[0].lower() or "permission" in args[0].lower()
+
+
+def test_action_copy_empty_dir_shows_notify(fake_screen):
+    fake_screen.active = "local"
+    fake_item = {"name": "emptydir", "is_dir": True}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.local_fs.is_accessible_from_ui = Mock(return_value=False)
+    fake_screen.notify = Mock()
+    fake_screen.action_copy()
+    fake_screen.notify.assert_called_once()
+    assert fake_screen.notify.call_args[1].get("severity") == "warning"
+
+
+def test_action_copy_unreadable_file_shows_notify(fake_screen):
+    fake_screen.active = "local"
+    fake_item = {"name": "secret.txt", "is_dir": False}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.local_fs.is_accessible_from_ui = Mock(return_value=False)
+    fake_screen.notify = Mock()
+    fake_screen.action_copy()
+    fake_screen.notify.assert_called_once()
+    assert fake_screen.notify.call_args[1].get("severity") == "warning"
+
+
+def test_action_delete_inaccessible_shows_notify(fake_screen):
+    fake_screen.active = "local"
+    fake_item = {"name": "locked.txt", "is_dir": False}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.local_fs.is_accessible_from_ui = Mock(return_value=False)
+    fake_screen.notify = Mock()
+    fake_screen.action_delete()
+    fake_screen.notify.assert_called_once()
+    assert fake_screen.notify.call_args[1].get("severity") == "warning"
+
+
+@pytest.mark.asyncio
+async def test_copy_worker_exception_shows_notify(fake_screen):
+    fake_screen.active = "local"
+    fake_screen.notify = Mock()
+    panel_instance = Mock()
+    panel_instance.remove = AsyncMock()
+
+    async def failing_upload(*args, **kwargs):
+        raise RuntimeError("upload failed: 403 Forbidden")
+
+    with (
+        patch("arty_mc.ui.commander_screen.TransferPanel", return_value=panel_instance),
+        patch("arty_mc.ui.commander_screen.upload", side_effect=failing_upload),
+        patch("arty_mc.ui.commander_screen.Path"),
+    ):
+        fake_screen.run_worker = lambda coro, **kw: type(
+            "W", (), {"wait": lambda self: coro}
+        )()
+        await fake_screen._copy_worker()
+
+    fake_screen._show_error.assert_called_once()
+    assert "Transfer failed" in fake_screen._show_error.call_args[0][0]
+    fake_screen.local_table.set_enabled.assert_any_call(True)
+    fake_screen.remote_table.set_enabled.assert_any_call(True)
+
+
+@pytest.mark.asyncio
+async def test_copy_worker_failed_shows_dialog(fake_screen):
+    from textual.worker import WorkerFailed  # type: ignore
+
+    fake_screen.active = "local"
+    fake_screen.notify = Mock()
+    panel_instance = Mock()
+    panel_instance.remove = AsyncMock()
+    inner_error = ConnectionError("Connection refused")
+
+    async def raise_worker_failed():
+        raise WorkerFailed(inner_error)
+
+    with (
+        patch("arty_mc.ui.commander_screen.TransferPanel", return_value=panel_instance),
+        patch("arty_mc.ui.commander_screen.upload", new=Mock(return_value=None)),
+    ):
+        fake_screen.run_worker = lambda coro, **kw: type(
+            "W", (), {"wait": lambda self: raise_worker_failed()}
+        )()
+        await fake_screen._copy_worker()
+
+    fake_screen._show_error.assert_called_once()
+    fake_screen.local_table.set_enabled.assert_any_call(True)
+    fake_screen.remote_table.set_enabled.assert_any_call(True)
+
+
+@pytest.mark.asyncio
+async def test_delete_worker_exception_shows_dialog(fake_screen):
+    fake_screen.active = "local"
+    fake_screen.notify = Mock()
+    panel_instance = Mock()
+    panel_instance.remove = AsyncMock()
+
+    async def failing_delete(*args, **kwargs):
+        raise RuntimeError("delete failed: 403 Forbidden")
+
+    fake_screen.local_fs.delete = failing_delete
+    entry = Mock()
+    entry.name = "file.txt"
+
+    with patch("arty_mc.ui.commander_screen.DeletePanel", return_value=panel_instance):
+        fake_screen.run_worker = lambda coro, **kw: type(
+            "W", (), {"wait": lambda self: coro}
+        )()
+        await fake_screen._delete_worker(entry)
+
+    fake_screen._show_error.assert_called_once()
+    assert "Delete failed" in fake_screen._show_error.call_args[0][0]
+    fake_screen.local_table.set_enabled.assert_any_call(True)
+    fake_screen.remote_table.set_enabled.assert_any_call(True)
+
+
+@pytest.mark.asyncio
+async def test_delete_worker_failed_shows_dialog(fake_screen):
+    from textual.worker import WorkerFailed  # type: ignore
+
+    fake_screen.active = "local"
+    fake_screen.notify = Mock()
+    panel_instance = Mock()
+    panel_instance.remove = AsyncMock()
+    inner_error = ConnectionError("Connection refused during delete")
+
+    async def raise_worker_failed():
+        raise WorkerFailed(inner_error)
+
+    entry = Mock()
+    entry.name = "file.txt"
+
+    with patch("arty_mc.ui.commander_screen.DeletePanel", return_value=panel_instance):
+        fake_screen.run_worker = lambda coro, **kw: type(
+            "W", (), {"wait": lambda self: raise_worker_failed()}
+        )()
+        await fake_screen._delete_worker(entry)
+
+    fake_screen._show_error.assert_called_once()
+    fake_screen.local_table.set_enabled.assert_any_call(True)
+    fake_screen.remote_table.set_enabled.assert_any_call(True)
+
+
+@pytest.mark.asyncio
+async def test_copy_worker_warn_handler_calls_notify(fake_screen):
+    fake_screen.active = "remote"
+    fake_screen.notify = Mock()
+    panel_instance = Mock()
+    panel_instance.remove = AsyncMock()
+
+    async def fake_download(*args, warn_callback=None, **kwargs):
+        if warn_callback:
+            warn_callback("AQL unavailable, falling back to slower directory walk.")
+
+    with (
+        patch("arty_mc.ui.commander_screen.TransferPanel", return_value=panel_instance),
+        patch("arty_mc.ui.commander_screen.download", side_effect=fake_download),
+        patch("arty_mc.ui.commander_screen.Path"),
+    ):
+        fake_screen.run_worker = lambda coro, **kw: type(
+            "W", (), {"wait": lambda self: coro}
+        )()
+        await fake_screen._copy_worker()
+
+    notify_calls = fake_screen.notify.call_args_list
+    warning_calls = [c for c in notify_calls if c[1].get("severity") == "warning"]
+    assert len(warning_calls) == 1
+    assert "AQL" in warning_calls[0][0][0]
+
+
+def test_show_error_calls_push_screen(fake_screen):
+    from arty_mc.ui.error_dialog import ErrorDialog
+
+    push_calls = []
+    mock_app = type(
+        "App", (), {"push_screen": lambda self, screen: push_calls.append(screen)}
+    )()
+    type(fake_screen).app = __import__(
+        "unittest.mock", fromlist=["PropertyMock"]
+    ).PropertyMock(return_value=mock_app)
+
+    del fake_screen._show_error
+    fake_screen._show_error("Something went wrong", title="Test Error")
+
+    assert len(push_calls) == 1
+    assert isinstance(push_calls[0], ErrorDialog)
+    assert push_calls[0].message == "Something went wrong"
+    assert push_calls[0].title_text == "Test Error"
