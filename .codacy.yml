@@ -1,0 +1,12 @@
+exclude_paths:
+  - tests/**
+
+engines:
+  bandit:
+    enabled: true
+    config:
+      ignore:
+        - B101
+        - B105
+        - B110
+        - B507

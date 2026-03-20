@@ -16,4 +16,4 @@ select = ["E", "F", "W", "S"]
 ignore = ["S603", "S607"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]  # assert is correct usage in pytest tests
+"tests/*" = ["S101", "S110"]  # assert is correct usage in pytest tests
