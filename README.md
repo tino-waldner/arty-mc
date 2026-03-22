@@ -130,6 +130,8 @@ This starts the **dual-pane interface** where you can browse your local filesyst
 > ```text
 > .keep
 > ```
+>
+> ⚠️ **Warning:** Deleting artifacts from repositories is irreversible and can't be canceled.
 
 ---
 
@@ -141,21 +143,21 @@ This starts the **dual-pane interface** where you can browse your local filesyst
 4. Copy files between panes
 5. Delete artifacts if needed
 
-⚠ **Warning:** Deleting artifacts from repositories may be irreversible.
+
 
 ---
 
 # Keyboard Shortcuts
 
-| Key   | Action           |
-| ----- | ---------------- |
-| ↑ ↓   | Navigate         |
-| Enter | Open directory   |
-| Tab   | Switch pane      |
-| F2    | Cancel Operation |
-| F5    | Copy             |
-| F8    | Delete           |
-| F10   | Quit             |
+| Key   | Action                |
+| ----- | --------------------- |
+| ↑ ↓   | Navigate              |
+| Enter | Open Directory        |
+| Tab   | Switch Pane           |
+| F2    | Cancel Copy Operation |
+| F5    | Copy                  |
+| F8    | Delete                |
+| F10   | Quit                  |
 
 ---
 
