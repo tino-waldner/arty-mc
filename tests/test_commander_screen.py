@@ -70,6 +70,7 @@ def fake_screen():
     screen.local_fs.cd = Mock(return_value=True)
     screen.local_fs.is_accessible = Mock(return_value=True)
     screen.local_fs.is_accessible_from_ui = Mock(return_value=True)
+    screen.local_fs.is_deletable_from_ui = Mock(return_value=True)
 
     screen.remote_fs = Mock()
     screen.remote_fs.repo = "dummy_repo"
@@ -317,7 +318,7 @@ def test_action_delete_no_selection(fake_screen):
 
 def test_action_delete_local_not_accessible(fake_screen):
     fake_screen.active = "local"
-    fake_screen.local_fs.is_accessible_from_ui = Mock(return_value=False)
+    fake_screen.local_fs.is_deletable_from_ui = Mock(return_value=False)
     fake_screen._delete_worker = AsyncMock()
     fake_screen.action_delete()
     fake_screen._delete_worker.assert_not_called()
@@ -486,7 +487,7 @@ def test_action_delete_inaccessible_shows_notify(fake_screen):
     fake_screen.active = "local"
     fake_item = {"name": "locked.txt", "is_dir": False}
     fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
-    fake_screen.local_fs.is_accessible_from_ui = Mock(return_value=False)
+    fake_screen.local_fs.is_deletable_from_ui = Mock(return_value=False)
     fake_screen.notify = Mock()
     fake_screen.action_delete()
     fake_screen.notify.assert_called_once()
@@ -593,31 +594,6 @@ async def test_delete_worker_failed_shows_dialog(fake_screen):
     fake_screen._show_error.assert_called_once()
     fake_screen.local_table.set_enabled.assert_any_call(True)
     fake_screen.remote_table.set_enabled.assert_any_call(True)
-
-
-@pytest.mark.asyncio
-async def test_copy_worker_warn_handler_calls_notify(fake_screen):
-    fake_screen.active = "remote"
-    fake_screen.notify = Mock()
-    panel_instance = Mock()
-    panel_instance.remove = AsyncMock()
-
-    async def fake_download(*args, warn_callback=None, **kwargs):
-        if warn_callback:
-            warn_callback("AQL unavailable, falling back to slower directory walk.")
-
-    with (
-        patch("arty_mc.ui.commander_screen.TransferPanel", return_value=panel_instance),
-        patch("arty_mc.ui.commander_screen.download", side_effect=fake_download),
-        patch("arty_mc.ui.commander_screen.Path"),
-    ):
-        fake_screen.run_worker = lambda coro, **kw: type("W", (), {"wait": lambda self: coro})()
-        await fake_screen._copy_worker()
-
-    notify_calls = fake_screen.notify.call_args_list
-    warning_calls = [c for c in notify_calls if c[1].get("severity") == "warning"]
-    assert len(warning_calls) == 1
-    assert "AQL" in warning_calls[0][0][0]
 
 
 def test_show_error_calls_push_screen(fake_screen):

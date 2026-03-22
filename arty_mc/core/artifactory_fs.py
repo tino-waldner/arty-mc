@@ -1,11 +1,9 @@
 import asyncio
 from typing import Optional
 
-from artifactory import ArtifactoryPath  # type: ignore
+import requests  # type: ignore
 
 from arty_mc.core.api_client import ArtifactoryAPI
-
-MAX_CONCURRENCY = 4
 
 
 class FileEntry:
@@ -70,72 +68,36 @@ class ArtifactoryFS:
         progress_callback=None,
         cancel_event: Optional[asyncio.Event] = None,
     ):
-
         cancel_event = cancel_event or asyncio.Event()
-        semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
-
-        try:
-            remote_root = ArtifactoryPath(
-                f"{self.server}/{entry.repo}/{self.path(entry.name)}",
-                auth=self.auth,
-            )
-        except Exception as e:
-            raise RuntimeError(f"Cannot reach Artifactory: {e}") from e
-
-        delete_queue = [remote_root]
 
         if progress_callback:
             progress_callback("start", None)
 
-        async def delete_worker(item):
-            if cancel_event.is_set():
-                return  # pragma: no cover
-            async with semaphore:
-                await asyncio.to_thread(self._delete_item, item, progress_callback)
-
         try:
-            while delete_queue:
-                current = delete_queue.pop(0)
-                if cancel_event.is_set():
-                    break
+            if cancel_event.is_set():
+                return
 
-                try:
-                    is_file = current.is_file()
-                    is_dir = current.is_dir()
-                except Exception as e:
-                    raise RuntimeError(f"Connection lost during delete: {e}") from e
+            url = f"{self.server}/{entry.repo}/{self.path(entry.name)}"
 
-                if is_file:
-                    if progress_callback:
-                        progress_callback("add_total", 1)
-                    await delete_worker(current)
-                elif is_dir:
-                    try:
-                        children = list(current.iterdir())
-                    except Exception as e:
-                        raise RuntimeError(f"Connection lost while listing directory: {e}") from e
+            if progress_callback:
+                progress_callback("add_total", 1)
 
-                    for child in children:
-                        delete_queue.append(child)
-                        if progress_callback:
-                            progress_callback("add_total", 1)
+            await asyncio.to_thread(self._delete_item, url, progress_callback)
 
-                    await delete_worker(current)
+        except RuntimeError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Cannot reach Artifactory: {e}") from e
         finally:
             if progress_callback:
                 progress_callback("finish", None)
 
-    def _delete_item(self, item, progress_callback=None):
+    def _delete_item(self, url, progress_callback=None):
         try:
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                try:
-                    item.rmdir()
-                except Exception:  # noqa: S110 # nosec
-                    pass
-        except Exception as e:
-            raise RuntimeError(f"Failed to delete {item}: {e}") from e
+            r = requests.delete(url, auth=self.auth, timeout=30)
+            r.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Failed to delete {url}: {e}") from e
         finally:
             if progress_callback:
                 progress_callback("advance", 1)

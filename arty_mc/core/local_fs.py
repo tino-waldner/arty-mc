@@ -106,6 +106,9 @@ class LocalFS:
     def is_accessible_from_ui(self, path) -> bool:
         return is_copyable(path)
 
+    def is_deletable_from_ui(self, path) -> bool:
+        return is_accessible(path)
+
     async def delete(self, name: str, progress_callback=None, cancel_event=None):
         cancel_event = cancel_event or asyncio.Event()
         path = os.path.normpath(self.path(name))

@@ -309,6 +309,45 @@ def test_is_accessible_from_ui_inaccessible(tmp_path):
         assert fs.is_accessible_from_ui(path) is False
 
 
+def test_is_deletable_from_ui_empty_dir(tmp_path):
+    """Empty dirs are deletable even though they are not copyable."""
+    fs = LocalFS()
+    d = tmp_path / "empty"
+    d.mkdir()
+    assert fs.is_deletable_from_ui(d) is True
+
+
+def test_is_deletable_from_ui_nonempty_dir(tmp_path):
+    fs = LocalFS()
+    d = tmp_path / "d"
+    d.mkdir()
+    (d / "a.txt").write_text("1")
+    assert fs.is_deletable_from_ui(d) is True
+
+
+def test_is_deletable_from_ui_file(tmp_path):
+    fs = LocalFS()
+    f = tmp_path / "f.txt"
+    f.write_text("x")
+    assert fs.is_deletable_from_ui(f) is True
+
+
+def test_is_deletable_from_ui_inaccessible(tmp_path):
+    fs = LocalFS()
+    path = tmp_path / "x"
+    with patch("arty_mc.core.local_fs.is_accessible", return_value=False):
+        assert fs.is_deletable_from_ui(path) is False
+
+
+def test_copy_blocks_empty_dir_delete_allows(tmp_path):
+    """Key distinction: empty dir is not copyable but is deletable."""
+    fs = LocalFS()
+    d = tmp_path / "empty"
+    d.mkdir()
+    assert fs.is_accessible_from_ui(d) is False  # copy blocked
+    assert fs.is_deletable_from_ui(d) is True  # delete allowed
+
+
 @pytest.mark.asyncio
 async def test_delete_nonexistent(tmp_path):
     fs = LocalFS()

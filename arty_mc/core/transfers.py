@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from artifactory import ArtifactoryPath  # type: ignore
 from requests import Session  # type: ignore
@@ -11,8 +11,6 @@ from arty_mc.core.fs_utils import is_accessible
 
 CHUNK_SIZE = 4 * 1024 * 1024
 CONCURRENCY_LIMIT = 4
-
-_aql_available: Optional[bool] = None
 
 
 class TransferEntry:
@@ -199,14 +197,8 @@ def _aql_expand_entry(
     base_url: str,
     session: Session,
     auth,
-    warn_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[TransferEntry], int]:
-    global _aql_available
-
-    if _aql_available is False:
-        return _rglob_expand_entry(entry, auth)
-
-    artifactory_base = base_url.rstrip("/") + "/artifactory"
+    artifactory_base = base_url.rstrip("/")
     rel = entry.remote[len(artifactory_base) :].lstrip("/")
     parts = rel.split("/", 1)
     repo = parts[0]
@@ -229,26 +221,15 @@ def _aql_expand_entry(
 
     aql_url = f"{artifactory_base}/api/search/aql"
 
-    try:
-        r = session.post(
-            aql_url,
-            data=aql,
-            auth=auth,
-            headers={"Content-Type": "text/plain"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        results = r.json().get("results", [])
-        _aql_available = True
-    except Exception as e:
-        _aql_available = False
-        if warn_callback:
-            warn_callback(
-                f"AQL search not available ({e}). "
-                f"This is expected on Artifactory OSS. "
-                f"Downloads will use a slower directory walk."
-            )
-        return _rglob_expand_entry(entry, auth)
+    r = session.post(
+        aql_url,
+        data=aql,
+        auth=auth,
+        headers={"Content-Type": "text/plain"},
+        timeout=30,
+    )
+    r.raise_for_status()
+    results = r.json().get("results", [])
 
     expanded = []
     total_bytes = 0
@@ -284,43 +265,11 @@ def _aql_expand_entry(
     return expanded, total_bytes
 
 
-def _rglob_expand_entry(entry: TransferEntry, auth) -> Tuple[List[TransferEntry], int]:
-    root = ArtifactoryPath(entry.remote, auth=auth)
-    entry.local.mkdir(parents=True, exist_ok=True)
-
-    expanded = []
-    total_bytes = 0
-
-    for child in root.rglob("*"):
-        rel = child.relative_to(root)
-        local_path = entry.local / str(rel)
-
-        if child.is_dir():
-            local_path.mkdir(parents=True, exist_ok=True)
-        else:
-            try:
-                size = child.stat().st_size
-            except Exception:
-                size = 0
-            total_bytes += size
-            expanded.append(
-                TransferEntry(
-                    local=local_path,
-                    remote=str(child),
-                    is_dir=False,
-                    size=size,
-                )
-            )
-
-    return expanded, total_bytes
-
-
 async def expand_entries(
     entries: List[TransferEntry],
     base_url: str,
     session: Session,
     auth,
-    warn_callback: Optional[Callable[[str], None]] = None,
 ) -> Tuple[List[TransferEntry], int]:
     expanded = []
     total_bytes = 0
@@ -338,7 +287,7 @@ async def expand_entries(
             )
         else:
             sub_entries, sub_bytes = await asyncio.to_thread(
-                _aql_expand_entry, entry, base_url, session, auth, warn_callback
+                _aql_expand_entry, entry, base_url, session, auth
             )
             expanded.extend(sub_entries)
             total_bytes += sub_bytes
@@ -352,18 +301,12 @@ async def download(
     auth=None,
     progress_callback=None,
     cancel_event=None,
-    warn_callback: Optional[Callable[[str], None]] = None,
-    use_aql: bool = True,
 ):
-    global _aql_available
     cancel_event = cancel_event or asyncio.Event()
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     session = create_session()
 
-    if not use_aql:
-        _aql_available = False
-
-    entries, total_bytes = await expand_entries(entries, base_url, session, auth, warn_callback)
+    entries, total_bytes = await expand_entries(entries, base_url, session, auth)
 
     if progress_callback:
         progress_callback("start", total_bytes)

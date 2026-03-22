@@ -133,9 +133,6 @@ class CommanderScreen(Screen):
             elif action == "finish":
                 self.transfer_panel.finish()
 
-        def warn_handler(message: str):
-            self.notify(message, severity="warning", timeout=8)
-
         try:
             item = self.get_active().selected()
             if not item:
@@ -175,8 +172,6 @@ class CommanderScreen(Screen):
                         auth=self.remote_fs.api.session.session.auth,
                         progress_callback=progress_handler,
                         cancel_event=self.cancel_event,
-                        warn_callback=warn_handler,
-                        use_aql=self.remote_fs.api.has_aql(),
                     ),
                     exit_on_error=False,
                 )
@@ -279,7 +274,7 @@ class CommanderScreen(Screen):
 
         if self.active == "local":
             path_name = f"{self.local_fs.cwd}/{entry.name}"
-            if not self.local_fs.is_accessible_from_ui(path_name):
+            if not self.local_fs.is_deletable_from_ui(path_name):
                 self.notify(
                     "Cannot delete: file is not accessible.",
                     severity="warning",

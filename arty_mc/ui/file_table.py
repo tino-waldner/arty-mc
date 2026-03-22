@@ -46,7 +46,8 @@ class FileTable(DataTable):
         self.refresh_table()
 
     def refresh_table(self):
-        self.clear()
+        self.clear(columns=True)
+        self.add_columns("Name", "Size", "Modified")
         for f in self.filtered_items:
             name = f["name"]
             if f.get("is_dir"):
