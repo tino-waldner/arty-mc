@@ -423,7 +423,6 @@ def test_aql_expand_entry_correct_url(tmp_path):
 
 
 def test_aql_expand_entry_raises_on_error(tmp_path):
-    """AQL errors propagate — no silent fallback."""
     session = MagicMock()
     session.post.side_effect = Exception("503 Service Unavailable")
     entry = transfers.TransferEntry(

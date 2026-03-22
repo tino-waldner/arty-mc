@@ -1,8 +1,6 @@
 import asyncio
 from typing import Optional
 
-import requests  # type: ignore
-
 from arty_mc.core.api_client import ArtifactoryAPI
 
 
@@ -94,9 +92,9 @@ class ArtifactoryFS:
 
     def _delete_item(self, url, progress_callback=None):
         try:
-            r = requests.delete(url, auth=self.auth, timeout=30)
+            r = self.api.session.session.delete(url, timeout=300)
             r.raise_for_status()
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             raise RuntimeError(f"Failed to delete {url}: {e}") from e
         finally:
             if progress_callback:
