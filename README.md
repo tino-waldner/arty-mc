@@ -51,7 +51,8 @@ For developers who prefer working directly in the terminal, this can be inconven
 ---
 
 # Screenshot
-![arty-mc_screenshot](/media/arty-mc1.png)
+
+![arty-mc_screenshot](https://raw.githubusercontent.com/tino-waldner/arty-mc/main/media/arty-mc1.png)
 
 ---
 
