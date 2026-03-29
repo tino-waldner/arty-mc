@@ -71,6 +71,7 @@ def fake_screen():
     screen.local_fs.is_accessible = Mock(return_value=True)
     screen.local_fs.is_accessible_from_ui = Mock(return_value=True)
     screen.local_fs.is_deletable_from_ui = Mock(return_value=True)
+    screen.local_fs.calculate_size = Mock(return_value="")
 
     screen.remote_fs = Mock()
     screen.remote_fs.repo = "dummy_repo"
@@ -82,6 +83,7 @@ def fake_screen():
     screen.remote_fs.api.session = Mock()
     screen.remote_fs.api.session.session = Mock()
     screen.remote_fs.api.session.session.auth = None
+    screen.remote_fs.calculate_size = Mock(return_value="")
 
     screen.local_path_line = Mock()
     screen.remote_path_line = Mock()
@@ -278,7 +280,7 @@ def test_action_quit_uses_app_exit(fake_screen):
 
 def test_action_copy_no_selection(fake_screen):
     fake_screen.get_active.return_value.selected = Mock(return_value=None)
-    fake_screen.action_copy()  # should not raise
+    fake_screen.action_copy()
 
 
 def test_action_copy_local_not_accessible(fake_screen):
@@ -596,6 +598,38 @@ async def test_delete_worker_failed_shows_dialog(fake_screen):
     fake_screen.remote_table.set_enabled.assert_any_call(True)
 
 
+def test_action_copy_confirm_message_includes_summary(fake_screen):
+    fake_screen.active = "local"
+    fake_item = {"name": "firmware.bin", "is_dir": False}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.local_fs.calculate_size = Mock(return_value="(2.3 GB)")
+    captured = {}
+
+    def fake_push_screen(dialog, callback=None):
+        captured["message"] = dialog.message
+
+    fake_screen.app.push_screen = fake_push_screen
+    fake_screen.action_copy()
+    assert "→" in captured["message"]
+    assert "2.3 GB" in captured["message"]
+
+
+def test_action_delete_confirm_message_includes_summary(fake_screen):
+    fake_screen.active = "local"
+    fake_item = {"name": "firmware.bin", "is_dir": False}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.local_fs.calculate_size = Mock(return_value="(1.0 MB)")
+    captured = {}
+
+    def fake_push_screen(dialog, callback=None):
+        captured["message"] = dialog.message
+
+    fake_screen.app.push_screen = fake_push_screen
+    fake_screen.action_delete()
+    assert "firmware.bin" in captured["message"]
+    assert "1.0 MB" in captured["message"]
+
+
 def test_show_error_calls_push_screen(fake_screen):
     from arty_mc.ui.error_dialog import ErrorDialog
 
@@ -612,3 +646,52 @@ def test_show_error_calls_push_screen(fake_screen):
     assert isinstance(push_calls[0], ErrorDialog)
     assert push_calls[0].message == "Something went wrong"
     assert push_calls[0].title_text == "Test Error"
+
+
+def test_action_copy_summary_exception_falls_back(fake_screen):
+    fake_screen.active = "remote"
+    fake_item = {"name": "firmware.bin", "is_dir": False, "size": None}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.remote_fs.calculate_size = Mock(side_effect=Exception("AQL down"))
+    captured = {}
+
+    def fake_push_screen(dialog, callback=None):
+        captured["message"] = dialog.message
+
+    fake_screen.app.push_screen = fake_push_screen
+    fake_screen.action_copy()
+    assert "firmware.bin" in captured["message"]
+    assert len(captured["message"].splitlines()) == 1
+
+
+def test_action_delete_remote_summary_shown(fake_screen):
+    fake_screen.active = "remote"
+    fake_item = {"name": "v1.0", "is_dir": True, "size": None}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.remote_fs.calculate_size = Mock(return_value="(12 files, 1.2 GB)")
+    captured = {}
+
+    def fake_push_screen(dialog, callback=None):
+        captured["message"] = dialog.message
+
+    fake_screen.app.push_screen = fake_push_screen
+    fake_screen.action_delete()
+    assert "v1.0" in captured["message"]
+    assert "1.2 GB" in captured["message"]
+    assert len(captured["message"].splitlines()) == 2
+
+
+def test_action_delete_summary_exception_falls_back(fake_screen):
+    fake_screen.active = "remote"
+    fake_item = {"name": "v1.0", "is_dir": True, "size": None}
+    fake_screen.get_active.return_value.selected = Mock(return_value=fake_item)
+    fake_screen.remote_fs.calculate_size = Mock(side_effect=Exception("AQL down"))
+    captured = {}
+
+    def fake_push_screen(dialog, callback=None):
+        captured["message"] = dialog.message
+
+    fake_screen.app.push_screen = fake_push_screen
+    fake_screen.action_delete()
+    assert "v1.0" in captured["message"]
+    assert len(captured["message"].splitlines()) == 1

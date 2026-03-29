@@ -114,8 +114,10 @@ python -m arty_mc libs-release-local
 
 This starts the **dual-pane interface** where you can browse your local filesystem and the selected repository.
 
-> ⚠️ **Important Note**
+> **Important Notes**
 >
+> ⚠️ **Warning:** Deleting artifacts from repositories is irreversible and can't be canceled.
+> 
 > - **Empty Directories** on your local filesystem are highlighted in **yellow**.  
 >   ❌ These **cannot** be copied to Artifactory as they are **not supported**.
 >
@@ -132,7 +134,9 @@ This starts the **dual-pane interface** where you can browse your local filesyst
 > .keep
 > ```
 >
-> ⚠️ **Warning:** Deleting artifacts from repositories is irreversible and can't be canceled.
+> ⚠️ File counts and folder sizes may differ between the local and remote repository because
+>    Artifactory performs deduplication, counting identical files only once.
+
 
 ---
 
@@ -223,8 +227,7 @@ twine upload dist/*
 
 # Demo
 
-[![Demo Cast](https://asciinema.org/a/C98JyrekqSudHBFE.svg)](https://asciinema.org/a/C98JyrekqSudHBFE)
-
+[![Demo Cast](https://asciinema.org/a/uJFM3IF4TUYa0R0k.svg)](https://asciinema.org/a/uJFM3IF4TUYa0R0k)
 
 ---
 

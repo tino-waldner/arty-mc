@@ -60,6 +60,34 @@ class ArtifactoryFS:
     def path(self, name: str):
         return f"{self._cwd}/{name}" if self._cwd else name
 
+    def calculate_size(self, entry) -> str:
+        if not entry.is_dir:
+            size = entry.size
+            if size is not None and size != "-":
+                return f"({self._fmt_size(int(size))})"
+            return ""
+
+        repo = entry.repo
+        name = self.path(entry.name)
+        path_clause = f'"$or": [{{"path": "{name}"}}, {{"path": {{"$match": "{name}/*"}}}}]'
+        aql = f'items.find({{"repo": "{repo}", "type": "file", {path_clause}}}).include("size")'
+        try:
+            data = self.api.session.post("/api/search/aql", aql)
+            results = data.get("results", [])
+            count = len(results)
+            total = sum(r.get("size", 0) for r in results)
+            return f"({count} file{'s' if count != 1 else ''}, {self._fmt_size(total)})"
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _fmt_size(size: float) -> str:
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if size < 1024:
+                return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
+            size /= 1024
+        return f"{size:.1f} PB"
+
     async def delete(
         self,
         entry,

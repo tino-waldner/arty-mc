@@ -287,6 +287,150 @@ def test_path_helper(tmp_path, monkeypatch):
     assert fs.path("file.txt") == os.path.join(fs.cwd, "file.txt")
 
 
+def test_calculate_size_file(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    f = tmp_path / "firmware.bin"
+    f.write_bytes(b"x" * 2048)
+    result = fs.calculate_size(str(f))
+    assert result == "(2.0 KB)"
+
+
+def test_calculate_size_file_bytes(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    f = tmp_path / "small.txt"
+    f.write_bytes(b"x" * 500)
+    result = fs.calculate_size(str(f))
+    assert result == "(500 B)"
+
+
+def test_calculate_size_directory_multiple_files(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    d = tmp_path / "mydir"
+    d.mkdir()
+    (d / "a.txt").write_bytes(b"x" * 1000)
+    (d / "b.txt").write_bytes(b"x" * 2000)
+    result = fs.calculate_size(str(d))
+    assert "2 files" in result
+    assert "KB" in result or "B" in result
+
+
+def test_calculate_size_directory_single_file(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    d = tmp_path / "mydir"
+    d.mkdir()
+    (d / "only.txt").write_bytes(b"x" * 100)
+    result = fs.calculate_size(str(d))
+    assert "1 file" in result
+    assert "files" not in result
+
+
+def test_calculate_size_directory_nested(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    d = tmp_path / "root"
+    d.mkdir()
+    sub = d / "sub"
+    sub.mkdir()
+    (d / "top.txt").write_bytes(b"x" * 100)
+    (sub / "nested.txt").write_bytes(b"x" * 200)
+    result = fs.calculate_size(str(d))
+    assert "2 files" in result
+
+
+def test_calculate_size_empty_directory(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    d = tmp_path / "empty"
+    d.mkdir()
+    result = fs.calculate_size(str(d))
+    assert "0 files" in result
+
+
+def test_calculate_size_unexpected_exception_returns_empty(tmp_path, monkeypatch):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    monkeypatch.setattr(
+        "os.path.exists", lambda p: (_ for _ in ()).throw(RuntimeError("disk failure"))
+    )
+    result = fs.calculate_size(str(tmp_path / "anything"))
+    assert result == ""
+
+
+def test_calculate_size_nonexistent_returns_empty(tmp_path):
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    result = fs.calculate_size(str(tmp_path / "nonexistent"))
+    assert result == ""
+
+
+def test_calculate_size_oserror_in_walk(tmp_path, monkeypatch):
+    import os
+
+    from arty_mc.core.local_fs import LocalFS
+
+    fs = LocalFS()
+    d = tmp_path / "mydir"
+    d.mkdir()
+    (d / "a.txt").write_bytes(b"x" * 500)
+    (d / "b.txt").write_bytes(b"x" * 500)
+
+    real_getsize = os.path.getsize
+
+    def flaky_getsize(p):
+        if p.endswith("a.txt"):
+            raise OSError("permission denied")
+        return real_getsize(p)
+
+    monkeypatch.setattr("os.path.getsize", flaky_getsize)
+    result = fs.calculate_size(str(d))
+    assert "2 files" in result
+    assert "500 B" in result
+
+
+def test_calculate_size_fmt_size_bytes():
+    from arty_mc.core.local_fs import LocalFS
+
+    assert LocalFS._fmt_size(0) == "0 B"
+    assert LocalFS._fmt_size(1023) == "1023 B"
+
+
+def test_calculate_size_fmt_size_kb():
+    from arty_mc.core.local_fs import LocalFS
+
+    assert "KB" in LocalFS._fmt_size(1024)
+    assert "1.0 KB" == LocalFS._fmt_size(1024)
+
+
+def test_calculate_size_fmt_size_mb():
+    from arty_mc.core.local_fs import LocalFS
+
+    assert "1.0 MB" == LocalFS._fmt_size(1024**2)
+
+
+def test_calculate_size_fmt_size_gb():
+    from arty_mc.core.local_fs import LocalFS
+
+    assert "1.0 GB" == LocalFS._fmt_size(1024**3)
+
+
+def test_calculate_size_fmt_size_pb():
+    from arty_mc.core.local_fs import LocalFS
+
+    assert "PB" in LocalFS._fmt_size(2 * 1024**5)
+
+
 def test_is_accessible_from_ui_nonempty_dir(tmp_path):
     fs = LocalFS()
     d = tmp_path / "d"
@@ -310,7 +454,6 @@ def test_is_accessible_from_ui_inaccessible(tmp_path):
 
 
 def test_is_deletable_from_ui_empty_dir(tmp_path):
-    """Empty dirs are deletable even though they are not copyable."""
     fs = LocalFS()
     d = tmp_path / "empty"
     d.mkdir()
@@ -340,12 +483,11 @@ def test_is_deletable_from_ui_inaccessible(tmp_path):
 
 
 def test_copy_blocks_empty_dir_delete_allows(tmp_path):
-    """Key distinction: empty dir is not copyable but is deletable."""
     fs = LocalFS()
     d = tmp_path / "empty"
     d.mkdir()
-    assert fs.is_accessible_from_ui(d) is False  # copy blocked
-    assert fs.is_deletable_from_ui(d) is True  # delete allowed
+    assert fs.is_accessible_from_ui(d) is False
+    assert fs.is_deletable_from_ui(d) is True
 
 
 @pytest.mark.asyncio

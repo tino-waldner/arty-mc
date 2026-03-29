@@ -103,6 +103,34 @@ class LocalFS:
     def path(self, name):
         return os.path.join(self.cwd, name)
 
+    def calculate_size(self, path) -> str:
+        try:
+            if not os.path.exists(path):
+                return ""
+            if os.path.isfile(path):
+                size = os.path.getsize(path)
+                return f"({self._fmt_size(size)})"
+            total = 0
+            count = 0
+            for dirpath, _, files in os.walk(path):
+                for f in files:
+                    try:
+                        total += os.path.getsize(os.path.join(dirpath, f))
+                    except OSError:
+                        pass
+                    count += 1
+            return f"({count} file{'s' if count != 1 else ''}, {self._fmt_size(total)})"
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _fmt_size(size: float) -> str:
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if size < 1024:
+                return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
+            size /= 1024
+        return f"{size:.1f} PB"
+
     def is_accessible_from_ui(self, path) -> bool:
         return is_copyable(path)
 

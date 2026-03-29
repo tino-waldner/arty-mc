@@ -42,7 +42,6 @@ def make_fs(monkeypatch):
 
 
 def set_delete_fn(fs, fn):
-    """Configure the fake session's delete behaviour for a test."""
     fs.api._fake_session._delete_fn = fn
 
 
@@ -82,6 +81,111 @@ def test_list(monkeypatch):
     assert items[0].is_dir is True
 
 
+def test_calculate_size_single_file(monkeypatch):
+    fs = make_fs(monkeypatch)
+    entry = type(
+        "E", (), {"repo": "repo", "name": "firmware.iso", "is_dir": False, "size": 1048576}
+    )
+    assert fs.calculate_size(entry) == "(1.0 MB)"
+
+
+def test_calculate_size_file_bytes(monkeypatch):
+    fs = make_fs(monkeypatch)
+    entry = type("E", (), {"repo": "repo", "name": "small.txt", "is_dir": False, "size": 512})
+    assert fs.calculate_size(entry) == "(512 B)"
+
+
+def test_calculate_size_file_no_size_returns_empty(monkeypatch):
+    fs = make_fs(monkeypatch)
+    entry = type("E", (), {"repo": "repo", "name": "file.txt", "is_dir": False, "size": None})
+    assert fs.calculate_size(entry) == ""
+
+
+def test_calculate_size_file_zero_size(monkeypatch):
+    fs = make_fs(monkeypatch)
+    entry = type("E", (), {"repo": "repo", "name": "empty.txt", "is_dir": False, "size": 0})
+    assert fs.calculate_size(entry) == "(0 B)"
+
+
+def test_calculate_size_directory_multiple_files(monkeypatch):
+    fs = make_fs(monkeypatch)
+    fs.api.session.post = lambda url, data: {
+        "results": [{"size": 1000}, {"size": 2000}, {"size": 3000}]
+    }
+    entry = type("E", (), {"repo": "repo", "name": "myfolder", "is_dir": True})
+    result = fs.calculate_size(entry)
+    assert "3 files" in result
+    assert "KB" in result
+
+
+def test_calculate_size_directory_single_file(monkeypatch):
+    fs = make_fs(monkeypatch)
+    fs.api.session.post = lambda url, data: {"results": [{"size": 512}]}
+    entry = type("E", (), {"repo": "repo", "name": "myfolder", "is_dir": True})
+    result = fs.calculate_size(entry)
+    assert "1 file" in result
+    assert "files" not in result
+
+
+def test_calculate_size_directory_empty(monkeypatch):
+    fs = make_fs(monkeypatch)
+    fs.api.session.post = lambda url, data: {"results": []}
+    entry = type("E", (), {"repo": "repo", "name": "empty", "is_dir": True})
+    result = fs.calculate_size(entry)
+    assert "0 files" in result
+
+
+def test_calculate_size_aql_uses_correct_endpoint(monkeypatch):
+    fs = make_fs(monkeypatch)
+    calls = []
+
+    def fake_post(url, data):
+        calls.append(url)
+        return {"results": []}
+
+    fs.api.session.post = fake_post
+    entry = type("E", (), {"repo": "repo", "name": "folder", "is_dir": True})
+    fs.calculate_size(entry)
+    assert calls == ["/api/search/aql"]
+
+
+def test_calculate_size_aql_fails_returns_empty(monkeypatch):
+    fs = make_fs(monkeypatch)
+
+    def fail(*a, **k):
+        raise Exception("AQL error")
+
+    fs.api.session.post = fail
+    entry = type("E", (), {"repo": "repo", "name": "myfolder", "is_dir": True})
+    assert fs.calculate_size(entry) == ""
+
+
+def test_calculate_size_fmt_size_bytes(monkeypatch):
+    fs = make_fs(monkeypatch)
+    assert fs._fmt_size(0) == "0 B"
+    assert fs._fmt_size(1023) == "1023 B"
+
+
+def test_calculate_size_fmt_size_kb(monkeypatch):
+    fs = make_fs(monkeypatch)
+    assert fs._fmt_size(1024) == "1.0 KB"
+
+
+def test_calculate_size_fmt_size_mb(monkeypatch):
+    fs = make_fs(monkeypatch)
+    assert fs._fmt_size(1024**2) == "1.0 MB"
+
+
+def test_calculate_size_fmt_size_gb(monkeypatch):
+    fs = make_fs(monkeypatch)
+    assert fs._fmt_size(1024**3) == "1.0 GB"
+
+
+def test_calculate_size_fmt_size_pb(monkeypatch):
+    fs = make_fs(monkeypatch)
+    assert "PB" in fs._fmt_size(2 * 1024**5)
+
+
 def test_delete_item_issues_delete_request(monkeypatch):
     delete_calls = []
 
@@ -107,8 +211,6 @@ def test_delete_item_raises_on_failure(monkeypatch):
 
 
 def test_delete_item_progress_always_fires(monkeypatch):
-    """progress advance fires even when DELETE request fails."""
-
     def fake_delete(url, timeout=30):
         raise OSError("timeout")
 
@@ -124,7 +226,6 @@ def test_delete_item_progress_always_fires(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_delete_file(monkeypatch):
-    """Deleting a file issues exactly one DELETE request."""
     delete_calls = []
 
     class FakeResponse:

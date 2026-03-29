@@ -219,7 +219,26 @@ class CommanderScreen(Screen):
             if result:
                 asyncio.create_task(self._copy_worker())
 
-        self.app.push_screen(ConfirmDialog(f"Transfer '{src}' → '{dst}'?"), callback=after_confirm)
+        try:
+            if self.active == "local":
+                summary = self.local_fs.calculate_size(self.local_fs.path(item["name"]))
+            else:
+                summary = self.remote_fs.calculate_size(
+                    FileEntry(
+                        repo=self.remote_fs.repo,
+                        name=item["name"],
+                        is_dir=item["is_dir"],
+                        size=item.get("size"),
+                    )
+                )
+        except Exception:
+            summary = ""
+
+        msg = f"Transfer '{src}' → '{dst}'?"
+        if summary:
+            msg += f"\n{summary}"
+
+        self.app.push_screen(ConfirmDialog(msg), callback=after_confirm)
 
     async def _delete_worker(self, entry: FileEntry):
         self._lock_ui()
@@ -288,7 +307,25 @@ class CommanderScreen(Screen):
             if result:
                 asyncio.create_task(self._delete_worker(entry))
 
-        self.app.push_screen(ConfirmDialog(f"Delete '{path_name}'?"), callback=after_confirm)
+        try:
+            if self.active == "local":
+                summary = self.local_fs.calculate_size(f"{self.local_fs.cwd}/{entry.name}")
+            else:
+                entry_with_size = FileEntry(
+                    repo=entry.repo,
+                    name=entry.name,
+                    is_dir=entry.is_dir,
+                    size=item.get("size"),
+                )
+                summary = self.remote_fs.calculate_size(entry_with_size)
+        except Exception:
+            summary = ""
+
+        msg = f"Delete '{path_name}'?"
+        if summary:
+            msg += f"\n{summary}"
+
+        self.app.push_screen(ConfirmDialog(msg), callback=after_confirm)
 
     async def action_cancel(self):
         if self.worker:
