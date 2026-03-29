@@ -49,7 +49,7 @@ class CommanderScreen(Screen):
             with Vertical():
                 self.local_filter = FilterBar(id="local-filter")
                 self.local_path_line = PathLine(self.local_fs.cwd)
-                self.local_table = FileTable()
+                self.local_table = FileTable(id="local-table")
                 yield self.local_filter
                 yield self.local_path_line
                 yield self.local_table
@@ -57,7 +57,7 @@ class CommanderScreen(Screen):
             with Vertical():
                 self.remote_filter = FilterBar(id="remote-filter")
                 self.remote_path_line = PathLine(f"{self.remote_fs.repo}/{self.remote_fs.path_str}")
-                self.remote_table = FileTable()
+                self.remote_table = FileTable(id="remote-table")
                 yield self.remote_filter
                 yield self.remote_path_line
                 yield self.remote_table
@@ -338,8 +338,25 @@ class CommanderScreen(Screen):
                 self.cancel_event.clear()
                 self.worker = None
 
+    @on(DataTable.RowHighlighted)
+    def on_data_table_row_highlighted(self, event) -> None:
+        if event.data_table is self.local_table:
+            self.active = "local"
+        elif event.data_table is self.remote_table:
+            self.active = "remote"
+
     @on(DataTable.RowSelected)
-    def on_data_table_row_selected(self, event):
+    def on_data_table_row_selected(self, event) -> None:
+        if event.data_table is self.local_table:
+            if self.active == "remote":
+                self.active = "local"
+                return
+            self.active = "local"
+        elif event.data_table is self.remote_table:
+            if self.active == "local":
+                self.active = "remote"
+                return
+            self.active = "remote"
         table = self.get_active()
         item = table.selected()
         if not item or not item.get("is_dir"):

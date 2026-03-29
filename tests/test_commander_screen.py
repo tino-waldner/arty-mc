@@ -2,9 +2,11 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 import pytest  # type: ignore
+from textual.worker import WorkerFailed  # type: ignore
 
 from arty_mc.core.artifactory_fs import FileEntry as ArtifactoryFileEntry
 from arty_mc.ui.commander_screen import CommanderScreen
+from arty_mc.ui.error_dialog import ErrorDialog
 
 
 class DummyWorker:
@@ -380,7 +382,9 @@ def test_row_selected_local_dir(fake_screen):
     fake_screen.local_table.selected = Mock(return_value={"name": "dir", "is_dir": True})
     fake_screen.local_fs.cd = Mock(return_value=True)
     fake_screen.refresh_local = Mock()
-    fake_screen.on_data_table_row_selected(Mock())
+    event = Mock()
+    event.data_table = fake_screen.local_table
+    fake_screen.on_data_table_row_selected(event)
     fake_screen.local_fs.cd.assert_called_once_with("dir")
     fake_screen.refresh_local.assert_called_once()
 
@@ -391,7 +395,9 @@ def test_row_selected_local_dir_cd_blocked(fake_screen):
     fake_screen.local_table.selected = Mock(return_value={"name": "locked", "is_dir": True})
     fake_screen.local_fs.cd = Mock(return_value=False)
     fake_screen.refresh_local = Mock()
-    fake_screen.on_data_table_row_selected(Mock())
+    event = Mock()
+    event.data_table = fake_screen.local_table
+    fake_screen.on_data_table_row_selected(event)
     fake_screen.refresh_local.assert_not_called()
 
 
@@ -401,7 +407,9 @@ def test_row_selected_remote_dir(fake_screen):
     fake_screen.remote_table.selected = Mock(return_value={"name": "dir", "is_dir": True})
     fake_screen.remote_fs.cd = Mock()
     fake_screen.refresh_remote = Mock()
-    fake_screen.on_data_table_row_selected(Mock())
+    event = Mock()
+    event.data_table = fake_screen.remote_table
+    fake_screen.on_data_table_row_selected(event)
     fake_screen.remote_fs.cd.assert_called_once_with("dir")
     fake_screen.refresh_remote.assert_called_once()
 
@@ -409,7 +417,9 @@ def test_row_selected_remote_dir(fake_screen):
 def test_row_selected_no_item(fake_screen):
     fake_screen.get_active = Mock(return_value=fake_screen.local_table)
     fake_screen.local_table.selected = Mock(return_value=None)
-    fake_screen.on_data_table_row_selected(Mock())
+    event = Mock()
+    event.data_table = fake_screen.local_table
+    fake_screen.on_data_table_row_selected(event)
 
 
 def test_row_selected_not_dir(fake_screen):
@@ -417,9 +427,75 @@ def test_row_selected_not_dir(fake_screen):
     fake_screen.local_table.selected = Mock(return_value={"name": "file.txt", "is_dir": False})
     fake_screen.local_fs.cd = Mock()
     fake_screen.refresh_local = Mock()
-    fake_screen.on_data_table_row_selected(Mock())
+    event = Mock()
+    event.data_table = fake_screen.local_table
+    fake_screen.on_data_table_row_selected(event)
     fake_screen.local_fs.cd.assert_not_called()
     fake_screen.refresh_local.assert_not_called()
+
+
+def test_row_highlighted_local_switches_active(fake_screen):
+    fake_screen.active = "remote"
+    event = Mock()
+    event.data_table = fake_screen.local_table
+    fake_screen.on_data_table_row_highlighted(event)
+    assert fake_screen.active == "local"
+
+
+def test_row_highlighted_remote_switches_active(fake_screen):
+    fake_screen.active = "local"
+    event = Mock()
+    event.data_table = fake_screen.remote_table
+    fake_screen.on_data_table_row_highlighted(event)
+    assert fake_screen.active == "remote"
+
+
+def test_row_highlighted_unknown_table_no_change(fake_screen):
+    fake_screen.active = "local"
+    event = Mock()
+    event.data_table = Mock()
+    fake_screen.on_data_table_row_highlighted(event)
+    assert fake_screen.active == "local"
+
+
+def test_row_selected_after_highlight_uses_correct_pane(fake_screen):
+    fake_screen.active = "local"
+    highlight_event = Mock()
+    highlight_event.data_table = fake_screen.remote_table
+    fake_screen.on_data_table_row_highlighted(highlight_event)
+    assert fake_screen.active == "remote"
+    fake_screen.get_active = Mock(return_value=fake_screen.remote_table)
+    fake_screen.remote_table.selected = Mock(return_value={"name": "dir", "is_dir": True})
+    fake_screen.remote_fs.cd = Mock()
+    fake_screen.refresh_remote = Mock()
+    select_event = Mock()
+    select_event.data_table = fake_screen.remote_table
+    fake_screen.on_data_table_row_selected(select_event)
+    fake_screen.remote_fs.cd.assert_called_once_with("dir")
+
+
+def test_row_selected_switches_to_local_and_returns(fake_screen):
+    fake_screen.active = "remote"
+    highlight_event = Mock()
+    highlight_event.data_table = fake_screen.local_table
+    fake_screen.refresh_local = Mock()
+    fake_screen.on_data_table_row_selected(highlight_event)
+    assert fake_screen.active == "local"
+    fake_screen.get_active = Mock(return_value=fake_screen.local_table)
+    fake_screen.get_active.assert_not_called()
+    fake_screen.refresh_local.assert_not_called()
+
+
+def test_row_selected_switches_to_remote_and_returns(fake_screen):
+    fake_screen.active = "local"
+    highlight_event = Mock()
+    highlight_event.data_table = fake_screen.remote_table
+    fake_screen.refresh_remote = Mock()
+    fake_screen.on_data_table_row_selected(highlight_event)
+    assert fake_screen.active == "remote"
+    fake_screen.get_active = Mock(return_value=fake_screen.remote_table)
+    fake_screen.get_active.assert_not_called()
+    fake_screen.refresh_remote.assert_not_called()
 
 
 def test_filter_local(fake_screen):
@@ -522,8 +598,6 @@ async def test_copy_worker_exception_shows_notify(fake_screen):
 
 @pytest.mark.asyncio
 async def test_copy_worker_failed_shows_dialog(fake_screen):
-    from textual.worker import WorkerFailed  # type: ignore
-
     fake_screen.active = "local"
     fake_screen.notify = Mock()
     panel_instance = Mock()
@@ -573,8 +647,6 @@ async def test_delete_worker_exception_shows_dialog(fake_screen):
 
 @pytest.mark.asyncio
 async def test_delete_worker_failed_shows_dialog(fake_screen):
-    from textual.worker import WorkerFailed  # type: ignore
-
     fake_screen.active = "local"
     fake_screen.notify = Mock()
     panel_instance = Mock()
@@ -631,8 +703,6 @@ def test_action_delete_confirm_message_includes_summary(fake_screen):
 
 
 def test_show_error_calls_push_screen(fake_screen):
-    from arty_mc.ui.error_dialog import ErrorDialog
-
     push_calls = []
     mock_app = type("App", (), {"push_screen": lambda self, screen: push_calls.append(screen)})()
     type(fake_screen).app = __import__("unittest.mock", fromlist=["PropertyMock"]).PropertyMock(

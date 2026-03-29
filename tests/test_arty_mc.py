@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest  # type: ignore
 
 from arty_mc.arty_mc import ArtyMc, main, print_usage  # type: ignore
+from arty_mc.ui.error_dialog import ErrorDialog
 
 
 @pytest.mark.parametrize(
@@ -74,8 +75,6 @@ def test_on_mount_config_error_shows_dialog(monkeypatch):
         app.on_mount()
 
     assert len(push_calls) == 1
-    from arty_mc.ui.error_dialog import ErrorDialog
-
     assert isinstance(push_calls[0][0], ErrorDialog)
     assert "Config file missing" in push_calls[0][0].message
     assert push_calls[0][0].title_text == "Configuration Error"

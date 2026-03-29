@@ -2,7 +2,7 @@ from setuptools import find_packages, setup  # type: ignore
 
 setup(
     name="arty-mc",
-    version="0.2.9",
+    version="0.3.0",
     packages=find_packages(),
     install_requires=[
         "textual>=0.52.0",
@@ -17,6 +17,18 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/tino-waldner/arty-mc",
     license="MIT",
+    keywords=[
+        "python",
+        "linux",
+        "cli",
+        "file-manager",
+        "terminal",
+        "artifactory",
+        "sysadmin",
+        "artifact-management",
+        "repo-browser",
+        "dual-pane",
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",

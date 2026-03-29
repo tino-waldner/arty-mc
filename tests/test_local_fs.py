@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest  # type: ignore
 
 from arty_mc.core.fs_utils import is_accessible, is_copyable
-from arty_mc.core.local_fs import MAX_CONCURRENCY, LocalFS
+from arty_mc.core.local_fs import MAX_CONCURRENCY, FileEntry, LocalFS
 
 
 def test_max_concurrency_constant():
@@ -15,8 +15,6 @@ def test_max_concurrency_constant():
 
 
 def test_file_entry_construction():
-    from arty_mc.core.local_fs import FileEntry
-
     fe = FileEntry(path="/some/dir/file.txt", is_dir=False)
     assert fe.path == "/some/dir/file.txt"
     assert fe.is_dir is False
@@ -288,8 +286,6 @@ def test_path_helper(tmp_path, monkeypatch):
 
 
 def test_calculate_size_file(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     f = tmp_path / "firmware.bin"
     f.write_bytes(b"x" * 2048)
@@ -298,8 +294,6 @@ def test_calculate_size_file(tmp_path):
 
 
 def test_calculate_size_file_bytes(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     f = tmp_path / "small.txt"
     f.write_bytes(b"x" * 500)
@@ -308,8 +302,6 @@ def test_calculate_size_file_bytes(tmp_path):
 
 
 def test_calculate_size_directory_multiple_files(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     d = tmp_path / "mydir"
     d.mkdir()
@@ -321,8 +313,6 @@ def test_calculate_size_directory_multiple_files(tmp_path):
 
 
 def test_calculate_size_directory_single_file(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     d = tmp_path / "mydir"
     d.mkdir()
@@ -333,8 +323,6 @@ def test_calculate_size_directory_single_file(tmp_path):
 
 
 def test_calculate_size_directory_nested(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     d = tmp_path / "root"
     d.mkdir()
@@ -347,8 +335,6 @@ def test_calculate_size_directory_nested(tmp_path):
 
 
 def test_calculate_size_empty_directory(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     d = tmp_path / "empty"
     d.mkdir()
@@ -357,8 +343,6 @@ def test_calculate_size_empty_directory(tmp_path):
 
 
 def test_calculate_size_unexpected_exception_returns_empty(tmp_path, monkeypatch):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     monkeypatch.setattr(
         "os.path.exists", lambda p: (_ for _ in ()).throw(RuntimeError("disk failure"))
@@ -368,18 +352,12 @@ def test_calculate_size_unexpected_exception_returns_empty(tmp_path, monkeypatch
 
 
 def test_calculate_size_nonexistent_returns_empty(tmp_path):
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     result = fs.calculate_size(str(tmp_path / "nonexistent"))
     assert result == ""
 
 
 def test_calculate_size_oserror_in_walk(tmp_path, monkeypatch):
-    import os
-
-    from arty_mc.core.local_fs import LocalFS
-
     fs = LocalFS()
     d = tmp_path / "mydir"
     d.mkdir()
@@ -400,34 +378,24 @@ def test_calculate_size_oserror_in_walk(tmp_path, monkeypatch):
 
 
 def test_calculate_size_fmt_size_bytes():
-    from arty_mc.core.local_fs import LocalFS
-
     assert LocalFS._fmt_size(0) == "0 B"
     assert LocalFS._fmt_size(1023) == "1023 B"
 
 
 def test_calculate_size_fmt_size_kb():
-    from arty_mc.core.local_fs import LocalFS
-
     assert "KB" in LocalFS._fmt_size(1024)
     assert "1.0 KB" == LocalFS._fmt_size(1024)
 
 
 def test_calculate_size_fmt_size_mb():
-    from arty_mc.core.local_fs import LocalFS
-
     assert "1.0 MB" == LocalFS._fmt_size(1024**2)
 
 
 def test_calculate_size_fmt_size_gb():
-    from arty_mc.core.local_fs import LocalFS
-
     assert "1.0 GB" == LocalFS._fmt_size(1024**3)
 
 
 def test_calculate_size_fmt_size_pb():
-    from arty_mc.core.local_fs import LocalFS
-
     assert "PB" in LocalFS._fmt_size(2 * 1024**5)
 
 

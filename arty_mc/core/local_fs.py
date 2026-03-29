@@ -124,7 +124,7 @@ class LocalFS:
             return ""
 
     @staticmethod
-    def _fmt_size(size: float) -> str:
+    def _fmt_size(size: int | float) -> str:
         for unit in ("B", "KB", "MB", "GB", "TB"):
             if size < 1024:
                 return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
